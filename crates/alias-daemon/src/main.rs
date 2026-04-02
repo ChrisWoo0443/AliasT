@@ -2,7 +2,13 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use tokio::signal::unix::{signal, SignalKind};
+use tokio_util::sync::CancellationToken;
 use tracing_subscriber::EnvFilter;
+
+mod connection;
+mod lifecycle;
+mod server;
 
 /// Alias suggestion daemon -- serves ghost-text completions over a Unix socket.
 #[derive(Parser)]
@@ -25,20 +31,6 @@ enum Commands {
     Stop,
     /// Check daemon status.
     Status,
-}
-
-/// Returns the default socket path following XDG conventions.
-///
-/// Checks `XDG_RUNTIME_DIR` first, falls back to `/tmp/alias-{uid}/alias/alias.sock`.
-fn default_socket_path() -> PathBuf {
-    if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
-        return PathBuf::from(runtime_dir).join("alias").join("alias.sock");
-    }
-
-    let uid = unsafe { libc::getuid() };
-    PathBuf::from(format!("/tmp/alias-{uid}"))
-        .join("alias")
-        .join("alias.sock")
 }
 
 /// Initializes tracing with file-based logging.
@@ -80,15 +72,49 @@ async fn main() -> Result<()> {
 
     match cli.command {
         Commands::Start { socket } => {
-            let socket_path = socket.unwrap_or_else(default_socket_path);
+            let socket_path = socket.unwrap_or_else(lifecycle::default_socket_path);
             tracing::info!(?socket_path, "starting daemon");
-            eprintln!("alias-daemon start: not yet implemented (socket: {})", socket_path.display());
+
+            let cancel_token = CancellationToken::new();
+            let server_token = cancel_token.clone();
+
+            let server_handle = tokio::spawn(async move {
+                server::run_server(&socket_path, server_token).await
+            });
+
+            // Wait for shutdown signals
+            let mut sigterm = signal(SignalKind::terminate())?;
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {
+                    tracing::info!("Received SIGINT, shutting down");
+                }
+                _ = sigterm.recv() => {
+                    tracing::info!("Received SIGTERM, shutting down");
+                }
+            }
+
+            cancel_token.cancel();
+
+            // Wait for server to finish cleanup
+            if let Err(err) = server_handle.await? {
+                tracing::error!("Server error during shutdown: {err}");
+            }
+
+            tracing::info!("Daemon stopped cleanly");
         }
         Commands::Stop => {
             eprintln!("alias-daemon stop: not yet implemented");
         }
         Commands::Status => {
-            eprintln!("alias-daemon status: not yet implemented");
+            let socket_path = lifecycle::default_socket_path();
+            match std::os::unix::net::UnixStream::connect(&socket_path) {
+                Ok(_) => {
+                    println!("alias-daemon is running (socket: {})", socket_path.display());
+                }
+                Err(_) => {
+                    println!("alias-daemon is not running");
+                }
+            }
         }
     }
 
