@@ -10,8 +10,8 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Core Infrastructure
 
 - [x] **INFRA-01**: Rust daemon listens on a Unix domain socket and processes suggestion requests asynchronously
-- [ ] **INFRA-02**: Zsh ZLE widget renders ghost-text suggestions via POSTDISPLAY with dimmed styling
-- [ ] **INFRA-03**: Zsh plugin communicates with daemon non-blockingly via zle -F fd callbacks
+- [x] **INFRA-02**: Zsh ZLE widget renders ghost-text suggestions via POSTDISPLAY with dimmed styling
+- [x] **INFRA-03**: Zsh plugin communicates with daemon non-blockingly via zle -F fd callbacks
 - [x] **INFRA-04**: NDJSON protocol between zsh plugin and Rust daemon for structured message exchange
 
 ### Inline Suggestions
@@ -77,8 +77,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | INFRA-01 | Phase 1 | Complete |
-| INFRA-02 | Phase 1 | Pending |
-| INFRA-03 | Phase 1 | Pending |
+| INFRA-02 | Phase 1 | Complete |
+| INFRA-03 | Phase 1 | Complete |
 | INFRA-04 | Phase 1 | Complete |
 | SUGG-01 | Phase 2 | Pending |
 | SUGG-02 | Phase 2 | Pending |
