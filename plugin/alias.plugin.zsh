@@ -26,13 +26,11 @@ _alias_connect() {
 
   zsocket "$_ALIAS_SOCKET_PATH" 2>/dev/null || return 1
   _ALIAS_FD=$REPLY
-  zle -F $_ALIAS_FD _alias_handle_response
   return 0
 }
 
 _alias_disconnect() {
   [[ -z "$_ALIAS_FD" ]] && return
-  zle -F $_ALIAS_FD
   exec {_ALIAS_FD}>&-
   _ALIAS_FD=""
 }
@@ -68,8 +66,8 @@ _alias_clear_ghost() {
   POSTDISPLAY=""
 }
 
-# ── 5. IPC -- send requests and handle responses ────────────────────
-_alias_send_request() {
+# ── 5. IPC -- send request and read response synchronously ──────────
+_alias_request_suggestion() {
   _alias_connect || return
 
   (( _ALIAS_REQ_ID++ ))
@@ -84,51 +82,35 @@ _alias_send_request() {
     _alias_reconnect
     return
   }
-}
 
-_alias_handle_response() {
-  local fd="$1"
-  local error_flag="$2"
+  # Read response synchronously (with short timeout to avoid blocking)
+  local line=""
+  if read -r -u $_ALIAS_FD -t 0.1 line; then
+    if [[ "$line" == *'"type":"suggestion"'* ]]; then
+      local text="${line##*\"text\":\"}"
+      text="${text%%\"*}"
 
-  # Error or hangup on the fd
-  if [[ -n "$error_flag" ]] || ! read -r -u "$fd" line; then
-    zle -F "$fd"
-    _ALIAS_FD=""
-    return
-  fi
-
-  # Only process suggestion responses
-  if [[ "$line" == *'"type":"suggestion"'* ]]; then
-    # Extract text field via pattern matching
-    local text="${line##*\"text\":\"}"
-    text="${text%%\"*}"
-
-    # Extract id field
-    local resp_id="${line##*\"id\":\"}"
-    resp_id="${resp_id%%\"*}"
-
-    # Staleness check -- only show if it matches our latest request
-    if [[ "$resp_id" == "r${_ALIAS_REQ_ID}" ]]; then
-      _alias_show_ghost "$text"
-      zle -R
+      if [[ -n "$text" ]]; then
+        _alias_show_ghost "$text"
+      else
+        _alias_clear_ghost
+      fi
     fi
   fi
 }
 
 # ── 6. Widget wrappers (minimal) ────────────────────────────────────
-zle -A self-insert _alias_orig_self_insert
-
+# Use .self-insert / .accept-line (dot-prefixed builtins) to avoid
+# infinite recursion when other plugins have already wrapped self-insert.
 _alias_self_insert_wrapper() {
-  zle _alias_orig_self_insert "$@"
-  _alias_send_request
+  zle .self-insert "$@"
+  _alias_request_suggestion
 }
 zle -N self-insert _alias_self_insert_wrapper
 
-zle -A accept-line _alias_orig_accept_line
-
 _alias_accept_line_wrapper() {
   _alias_clear_ghost
-  zle _alias_orig_accept_line "$@"
+  zle .accept-line "$@"
 }
 zle -N accept-line _alias_accept_line_wrapper
 
