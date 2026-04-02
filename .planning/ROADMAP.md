@@ -32,7 +32,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 3 plans
 
 Plans:
-- [ ] 01-01-PLAN.md -- Cargo workspace scaffolding, NDJSON protocol types, core suggestion function, daemon CLI skeleton
+- [x] 01-01-PLAN.md -- Cargo workspace scaffolding, NDJSON protocol types, core suggestion function, daemon CLI skeleton
 - [ ] 01-02-PLAN.md -- Daemon server implementation: socket listener, connection handler, lifecycle management, graceful shutdown
 - [ ] 01-03-PLAN.md -- Zsh plugin with IPC and ghost text rendering, end-to-end integration tests, visual verification
 
