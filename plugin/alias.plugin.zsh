@@ -19,6 +19,8 @@ typeset -g _ALIAS_HIGHLIGHT_ENTRY=""
 typeset -g _ALIAS_LAST_BUFFER=""
 typeset -g _ALIAS_LAST_HISTNUM=0
 typeset -g _ALIAS_SOCKET_PATH="${XDG_RUNTIME_DIR:-/tmp/alias-$UID}/alias/alias.sock"
+typeset -g _ALIAS_NL_STATE="inactive"   # inactive | input | generating | review
+typeset -g _ALIAS_NL_PROMPT=""           # Saved prompt for regeneration
 
 # ── 3. Connection management (lazy -- no I/O at plugin load time) ───
 _alias_connect() {
@@ -104,15 +106,26 @@ _alias_request_suggestion() {
 # infinite recursion when other plugins have already wrapped self-insert.
 _alias_self_insert_wrapper() {
   zle .self-insert "$@"
+  # Skip ghost text suggestions during NL mode (PREDISPLAY conflicts)
+  [[ "$_ALIAS_NL_STATE" != "inactive" ]] && return
   _alias_request_suggestion
 }
 zle -N self-insert _alias_self_insert_wrapper
 
-_alias_accept_line_wrapper() {
-  _alias_clear_ghost
-  zle .accept-line "$@"
+_alias_nl_accept() {
+  if [[ "$_ALIAS_NL_STATE" == "review" || "$_ALIAS_NL_STATE" == "input" ]]; then
+    # Exit NL mode, then accept the line
+    _ALIAS_NL_STATE="inactive"
+    _ALIAS_NL_PROMPT=""
+    PREDISPLAY=""
+    zle .accept-line
+  else
+    # Normal accept-line behavior (clears ghost first)
+    _alias_clear_ghost
+    zle .accept-line
+  fi
 }
-zle -N accept-line _alias_accept_line_wrapper
+zle -N accept-line _alias_nl_accept
 
 # ── 7. Accept keybindings ───────────────────────────────────────────
 _alias_accept_suggestion() {
@@ -161,7 +174,175 @@ _alias_line_pre_redraw() {
 }
 add-zle-hook-widget zle-line-pre-redraw _alias_line_pre_redraw
 
-# ── 9. Command recording (precmd hook) ─────────────────────────────
+# ── 9. NL Mode: Natural Language to Command ────────────────────────
+
+_alias_nl_deactivate() {
+  _ALIAS_NL_STATE="inactive"
+  _ALIAS_NL_PROMPT=""
+  PREDISPLAY=""
+  BUFFER=""
+  CURSOR=0
+  zle -R
+}
+
+_alias_nl_generate() {
+  local prompt="$BUFFER"
+  [[ -z "$prompt" && -n "$_ALIAS_NL_PROMPT" ]] && prompt="$_ALIAS_NL_PROMPT"
+  [[ -z "$prompt" ]] && { _alias_nl_deactivate; return; }
+
+  _ALIAS_NL_PROMPT="$prompt"
+  BUFFER=""
+
+  local tmpfile
+  tmpfile=$(mktemp "${TMPDIR:-/tmp}/alias-nl.XXXXXX")
+
+  # Background: open NEW connection, send generate request, write response
+  {
+    zmodload zsh/net/socket 2>/dev/null
+    local bg_fd
+    zsocket "$_ALIAS_SOCKET_PATH" 2>/dev/null
+    bg_fd=$REPLY
+    if [[ -z "$bg_fd" ]]; then
+      echo "error:connect" > "$tmpfile"
+      exit 1
+    fi
+
+    (( _ALIAS_REQ_ID++ ))
+    local escaped="${prompt//\\/\\\\}"
+    escaped="${escaped//\"/\\\"}"
+    # Remove newlines from prompt
+    escaped="${escaped//$'\n'/ }"
+    local msg="{\"id\":\"r${_ALIAS_REQ_ID}\",\"type\":\"generate\",\"prompt\":\"${escaped}\"}"
+    print -u $bg_fd "$msg" 2>/dev/null || { echo "error:send" > "$tmpfile"; exec {bg_fd}>&-; exit 1; }
+
+    local line=""
+    read -r -u $bg_fd -t 30 line 2>/dev/null || { echo "error:timeout" > "$tmpfile"; exec {bg_fd}>&-; exit 1; }
+    echo "$line" > "$tmpfile"
+    exec {bg_fd}>&-
+  } &
+  local bg_pid=$!
+
+  # Foreground: spinner animation using zle -R (works in widget context)
+  local spinner_chars='/-\|'
+  local frame=0
+  PREDISPLAY="[/] "
+  zle -R
+
+  while kill -0 $bg_pid 2>/dev/null; do
+    PREDISPLAY="[${spinner_chars:$((frame % 4)):1}] "
+    zle -R
+    # Brief sleep to control animation speed (~10fps)
+    if read -t 0.1 -k 1 key < /dev/tty 2>/dev/null; then
+      if [[ "$key" == $'\e' ]]; then
+        kill $bg_pid 2>/dev/null
+        wait $bg_pid 2>/dev/null
+        rm -f "$tmpfile"
+        _alias_nl_deactivate
+        return
+      fi
+    fi
+    ((frame++))
+  done
+  wait $bg_pid 2>/dev/null
+
+  # Read result from tmpfile
+  local result
+  result=$(<"$tmpfile")
+  rm -f "$tmpfile"
+
+  # Handle error responses
+  if [[ "$result" == error:* ]]; then
+    local error_type="${result#error:}"
+    PREDISPLAY="[NL] "
+    case "$error_type" in
+      connect)
+        BUFFER="# Error: cannot connect to daemon"
+        ;;
+      send|timeout)
+        BUFFER="# Error: daemon communication failed"
+        ;;
+    esac
+    _ALIAS_NL_STATE="review"
+    CURSOR=$#BUFFER
+    zle -R
+    return
+  fi
+
+  # Parse JSON response -- extract "text" field for command, "msg" field for error
+  if [[ "$result" == *'"type":"command"'* ]]; then
+    local command_text="${result##*\"text\":\"}"
+    command_text="${command_text%%\"*}"
+    # Unescape basic JSON escapes
+    command_text="${command_text//\\n/$'\n'}"
+    command_text="${command_text//\\\\/\\}"
+    command_text="${command_text//\\\"/\"}"
+    PREDISPLAY="[NL] "
+    BUFFER="$command_text"
+    CURSOR=$#BUFFER
+    _ALIAS_NL_STATE="review"
+    zle -R
+  elif [[ "$result" == *'"type":"error"'* ]]; then
+    local error_msg="${result##*\"msg\":\"}"
+    error_msg="${error_msg%%\"*}"
+    PREDISPLAY="[NL] "
+    BUFFER="# ${error_msg}"
+    CURSOR=$#BUFFER
+    _ALIAS_NL_STATE="review"
+    zle -R
+  else
+    PREDISPLAY="[NL] "
+    BUFFER="# Error: unexpected response"
+    _ALIAS_NL_STATE="review"
+    CURSOR=$#BUFFER
+    zle -R
+  fi
+}
+
+_alias_nl_toggle() {
+  case "$_ALIAS_NL_STATE" in
+    inactive)
+      # Enter NL mode
+      _ALIAS_NL_STATE="input"
+      _alias_clear_ghost  # Suspend ghost text suggestions
+      PREDISPLAY="[NL] "
+      BUFFER=""
+      CURSOR=0
+      zle -R
+      ;;
+    input)
+      # User typed a prompt, trigger generation
+      if [[ -z "$BUFFER" ]]; then
+        _alias_nl_deactivate
+        return
+      fi
+      _ALIAS_NL_STATE="generating"
+      _alias_nl_generate
+      ;;
+    review)
+      # Regenerate with the same prompt
+      _ALIAS_NL_STATE="generating"
+      BUFFER=""
+      _alias_nl_generate
+      ;;
+    generating)
+      # Already generating, ignore
+      ;;
+  esac
+}
+zle -N _alias_nl_toggle
+bindkey '^ ' _alias_nl_toggle
+
+_alias_nl_escape() {
+  if [[ "$_ALIAS_NL_STATE" != "inactive" ]]; then
+    _alias_nl_deactivate
+  else
+    zle send-break
+  fi
+}
+zle -N _alias_nl_escape
+bindkey '\e' _alias_nl_escape
+
+# ── 10. Command recording (precmd hook) ────────────────────────────
 _alias_precmd_record() {
   # Get the most recent history entry number and command via fc
   local fc_out
@@ -195,7 +376,7 @@ _alias_precmd_record() {
 autoload -Uz add-zsh-hook
 add-zsh-hook precmd _alias_precmd_record
 
-# ── 10. Compatibility detection ─────────────────────────────────────
+# ── 11. Compatibility detection ─────────────────────────────────────
 if (( ${+_ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE} )) || [[ -n "${functions[_zsh_autosuggest_suggest]}" ]]; then
   print "alias: zsh-autosuggestions detected. Ghost text may conflict." >&2
 fi
