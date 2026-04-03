@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 03-02-PLAN.md
-last_updated: "2026-04-03T02:43:32.442Z"
+stopped_at: Completed 04-01-PLAN.md
+last_updated: "2026-04-03T18:42:39.286Z"
 last_activity: 2026-04-03
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 9
-  completed_plans: 7
+  total_plans: 11
+  completed_plans: 8
   percent: 0
 ---
 
@@ -59,6 +59,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 02 P02 | 3min | 2 tasks | 5 files |
 | Phase 03-01 P01 | 3min | 1 tasks | 9 files |
 | Phase 03 P02 | 3min | 2 tasks | 6 files |
+| Phase 04 P01 | 6min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,9 @@ Recent decisions affecting current work:
 - [Phase 03]: Kept AiBackend trait and OllamaBackend in alias-core for simplicity; used reqwest directly for Ollama
 - [Phase 03]: Option<Arc<dyn AiBackend>> for optional AI dispatch through daemon server to connection handlers
 - [Phase 03]: dispatch_request made async to support awaiting AI backend generate calls
+- [Phase 04]: Frecency SQL scoring with recency/frequency/directory/exit-code buckets for context-aware ranking
+- [Phase 04]: Keep AiBackend trait unchanged; enrich prompt at call site with [Context] block prefix
+- [Phase 04]: PRAGMA user_version for schema migration; suggest_ranked falls back to suggest_prefix
 
 ### Pending Todos
 
@@ -92,6 +96,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-03T02:43:32.440Z
-Stopped at: Completed 03-02-PLAN.md
+Last session: 2026-04-03T18:42:39.284Z
+Stopped at: Completed 04-01-PLAN.md
 Resume file: None

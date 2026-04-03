@@ -19,8 +19,8 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **SUGG-01**: User sees ghost-text suggestion from shell history within 100ms of typing
 - [ ] **SUGG-02**: User can accept full suggestion with Tab or Right-arrow
 - [ ] **SUGG-03**: User can accept suggestion word-by-word with Alt+Right
-- [ ] **SUGG-04**: Suggestions are ranked by frecency (recency + frequency + directory affinity + exit code)
-- [ ] **SUGG-05**: Suggestions are context-aware using cwd, git status, last exit code, and env vars
+- [x] **SUGG-04**: Suggestions are ranked by frecency (recency + frequency + directory affinity + exit code)
+- [x] **SUGG-05**: Suggestions are context-aware using cwd, git status, last exit code, and env vars
 - [x] **SUGG-06**: History is indexed in SQLite with metadata (command, timestamp, cwd, exit code, duration)
 
 ### Natural Language Mode
@@ -83,8 +83,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SUGG-01 | Phase 2 | Complete |
 | SUGG-02 | Phase 2 | Pending |
 | SUGG-03 | Phase 2 | Pending |
-| SUGG-04 | Phase 4 | Pending |
-| SUGG-05 | Phase 4 | Pending |
+| SUGG-04 | Phase 4 | Complete |
+| SUGG-05 | Phase 4 | Complete |
 | SUGG-06 | Phase 2 | Complete |
 | NL-01 | Phase 3 | Pending |
 | NL-02 | Phase 3 | Complete |
