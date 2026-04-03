@@ -7,6 +7,8 @@ use tokio::signal::unix::{signal, SignalKind};
 use tokio_util::sync::CancellationToken;
 use tracing_subscriber::EnvFilter;
 
+use alias_core::ai::claude::ClaudeBackend;
+use alias_core::ai::openai::OpenAiBackend;
 use alias_core::ai::{AiBackend, ollama::OllamaBackend};
 use alias_core::history::{parse_history_file, HistoryStore};
 
@@ -126,16 +128,43 @@ async fn main() -> Result<()> {
 
             let shared_store = Arc::new(Mutex::new(store));
 
-            // Initialize AI backend from ALIAS_NL_MODEL env var
-            let ai_backend: Option<Arc<dyn AiBackend>> = match std::env::var("ALIAS_NL_MODEL") {
-                Ok(model) if !model.is_empty() => {
-                    let backend = OllamaBackend::new(model.clone());
-                    tracing::info!(model = %model, "AI backend initialized: ollama");
-                    Some(Arc::new(backend))
-                }
-                _ => {
-                    tracing::info!("No ALIAS_NL_MODEL set -- NL mode disabled");
-                    None
+            // Initialize AI backend from ALIAS_NL_BACKEND + ALIAS_NL_MODEL env vars
+            let ai_backend: Option<Arc<dyn AiBackend>> = {
+                let model = std::env::var("ALIAS_NL_MODEL").ok().filter(|m| !m.is_empty());
+                let backend_name = std::env::var("ALIAS_NL_BACKEND")
+                    .unwrap_or_else(|_| "ollama".to_string());
+
+                match model {
+                    Some(model) => match backend_name.as_str() {
+                        "claude" => match std::env::var("ALIAS_ANTHROPIC_KEY") {
+                            Ok(key) if !key.is_empty() => {
+                                tracing::info!(model = %model, "AI backend initialized: claude");
+                                Some(Arc::new(ClaudeBackend::new(key, model)))
+                            }
+                            _ => {
+                                tracing::warn!("ALIAS_NL_BACKEND=claude but ALIAS_ANTHROPIC_KEY not set -- NL mode disabled");
+                                None
+                            }
+                        },
+                        "openai" => match std::env::var("ALIAS_OPENAI_KEY") {
+                            Ok(key) if !key.is_empty() => {
+                                tracing::info!(model = %model, "AI backend initialized: openai");
+                                Some(Arc::new(OpenAiBackend::new(key, model)))
+                            }
+                            _ => {
+                                tracing::warn!("ALIAS_NL_BACKEND=openai but ALIAS_OPENAI_KEY not set -- NL mode disabled");
+                                None
+                            }
+                        },
+                        _ => {
+                            tracing::info!(model = %model, "AI backend initialized: ollama");
+                            Some(Arc::new(OllamaBackend::new(model)))
+                        }
+                    },
+                    None => {
+                        tracing::info!("No ALIAS_NL_MODEL set -- NL mode disabled");
+                        None
+                    }
                 }
             };
 
