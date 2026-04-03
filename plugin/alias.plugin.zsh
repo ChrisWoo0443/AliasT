@@ -60,10 +60,9 @@ _alias_show_ghost() {
 }
 
 _alias_clear_ghost() {
-  if [[ -n "$_ALIAS_HIGHLIGHT_ENTRY" ]]; then
-    region_highlight=("${(@)region_highlight:#$_ALIAS_HIGHLIGHT_ENTRY}")
-    _ALIAS_HIGHLIGHT_ENTRY=""
-  fi
+  # Remove all alias-owned highlight entries (memo=alias)
+  region_highlight=("${(@)region_highlight:#* memo=alias}")
+  _ALIAS_HIGHLIGHT_ENTRY=""
   POSTDISPLAY=""
 }
 
@@ -118,9 +117,11 @@ zle -N accept-line _alias_accept_line_wrapper
 # ── 7. Accept keybindings ───────────────────────────────────────────
 _alias_accept_suggestion() {
   if [[ -n "$POSTDISPLAY" ]]; then
-    BUFFER="${BUFFER}${POSTDISPLAY}"
-    CURSOR=$#BUFFER
+    # Save ghost text, clear display, then update buffer
+    local ghost="$POSTDISPLAY"
     _alias_clear_ghost
+    BUFFER="${BUFFER}${ghost}"
+    CURSOR=$#BUFFER
   else
     zle expand-or-complete
   fi
@@ -132,18 +133,13 @@ _alias_accept_word() {
   if [[ -n "$POSTDISPLAY" ]]; then
     local remaining="$POSTDISPLAY"
     local word=""
-    # Grab leading whitespace
-    if [[ "$remaining" =~ '^[[:space:]]*' ]]; then
+    # Grab leading whitespace + next word
+    if [[ "$remaining" =~ '^[[:space:]]*[^[:space:]]+' ]]; then
       word="${MATCH}"
-      remaining="${remaining#$MATCH}"
     fi
-    # Grab next non-space word
-    if [[ "$remaining" =~ '^[^[:space:]]+' ]]; then
-      word="${word}${MATCH}"
-    fi
+    _alias_clear_ghost
     BUFFER="${BUFFER}${word}"
     CURSOR=$#BUFFER
-    _alias_clear_ghost
     # Re-request suggestion for updated buffer
     _alias_request_suggestion
   else
@@ -152,6 +148,7 @@ _alias_accept_word() {
 }
 zle -N _alias_accept_word
 bindkey '^[[Z' _alias_accept_word
+bindkey '\e[Z' _alias_accept_word
 
 # ── 8. Hook registration (non-conflicting) ──────────────────────────
 _alias_line_pre_redraw() {
@@ -166,18 +163,16 @@ add-zle-hook-widget zle-line-pre-redraw _alias_line_pre_redraw
 
 # ── 9. Command recording (precmd hook) ─────────────────────────────
 _alias_precmd_record() {
-  # Get the last history entry number and command
-  local hist_line
-  hist_line="$(fc -l -1 2>/dev/null)" || return
-  local histnum="${hist_line%%[[:space:]]*}"
-
-  # Skip if we already recorded this history event
-  [[ "$histnum" == "$_ALIAS_LAST_HISTNUM" ]] && return
-  _ALIAS_LAST_HISTNUM="$histnum"
-
-  # Extract command text (strip leading number + spaces from fc output)
-  local cmd="${hist_line#*[0-9]  }"
+  # Get the most recent history entry number and command via fc
+  local fc_out
+  fc_out="$(fc -ln -1 2>/dev/null)" || return
+  # fc -ln -1 outputs just the command (no number), with leading whitespace
+  local cmd="${fc_out#"${fc_out%%[! ]*}"}"
   [[ -z "$cmd" ]] && return
+
+  # Deduplicate using the command text itself
+  [[ "$cmd" == "$_ALIAS_LAST_RECORDED" ]] && return
+  typeset -g _ALIAS_LAST_RECORDED="$cmd"
 
   _alias_connect || return
 
@@ -190,8 +185,11 @@ _alias_precmd_record() {
   (( _ALIAS_REQ_ID++ ))
   local msg="{\"id\":\"r${_ALIAS_REQ_ID}\",\"type\":\"record\",\"cmd\":\"${escaped_cmd}\",\"cwd\":\"${escaped_cwd}\"}"
 
-  # Fire-and-forget: send but don't wait for response
-  print -u $_ALIAS_FD "$msg" 2>/dev/null || _alias_reconnect
+  # Send and read the Ack response to keep the socket buffer clean
+  # (stale Ack would confuse the next suggestion read)
+  print -u $_ALIAS_FD "$msg" 2>/dev/null || { _alias_reconnect; return }
+  local ack=""
+  read -r -u $_ALIAS_FD -t 0.2 ack 2>/dev/null
 }
 
 autoload -Uz add-zsh-hook
