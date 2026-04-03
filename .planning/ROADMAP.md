@@ -76,10 +76,11 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. Suggestions are ranked by frecency (recency + frequency + directory affinity + exit code weighting)
   2. Suggestions reflect the user's current context -- different suggestions appear in different directories, git repos, and after different exit codes
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 04-01: TBD
+- [ ] 04-01-PLAN.md -- Protocol extension, schema migration, frecency SQL query, suggest() context-aware, daemon dispatch, AI prompt enrichment
+- [ ] 04-02-PLAN.md -- Zsh plugin exit code capture, context gathering for Complete/Record/Generate, git branch caching
 
 ### Phase 5: Cloud Backends & Terminal Compatibility
 **Goal**: Users can opt into cloud AI providers for higher-quality generation, and the plugin works reliably across major macOS terminals
@@ -105,5 +106,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 1. Daemon + IPC + Ghost Text | 3/3 | Complete | 2026-04-02 |
 | 2. History-Based Suggestions | 0/3 | Planning complete | - |
 | 3. Natural Language Mode | 0/3 | Planning complete | - |
-| 4. Context & Ranking Intelligence | 0/0 | Not started | - |
+| 4. Context & Ranking Intelligence | 0/2 | Planning complete | - |
 | 5. Cloud Backends & Terminal Compatibility | 0/0 | Not started | - |
