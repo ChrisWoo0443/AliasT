@@ -1,4 +1,4 @@
-use alias_core::history::HistoryStore;
+use alias_core::history::{HistoryStore, SuggestionContext};
 use alias_core::suggest;
 
 #[test]
@@ -8,10 +8,11 @@ fn suggest_returns_suffix_from_history() {
     let store = HistoryStore::open(&db_path).unwrap();
 
     store
-        .record_command("git checkout main", 1000, "/home")
+        .record_command("git checkout main", 1000, "/home", None)
         .unwrap();
 
-    let result = suggest(&store, "git ch");
+    let context = SuggestionContext::default();
+    let result = suggest(&store, "git ch", &context);
     assert_eq!(result, Some("eckout main".to_string()));
 }
 
@@ -21,7 +22,8 @@ fn suggest_empty_input_returns_none() {
     let db_path = tmp_dir.path().join("test.db");
     let store = HistoryStore::open(&db_path).unwrap();
 
-    let result = suggest(&store, "");
+    let context = SuggestionContext::default();
+    let result = suggest(&store, "", &context);
     assert_eq!(result, None);
 }
 
@@ -31,7 +33,8 @@ fn suggest_no_match_returns_none() {
     let db_path = tmp_dir.path().join("test.db");
     let store = HistoryStore::open(&db_path).unwrap();
 
-    let result = suggest(&store, "unknown_xyz");
+    let context = SuggestionContext::default();
+    let result = suggest(&store, "unknown_xyz", &context);
     assert_eq!(result, None);
 }
 
@@ -42,10 +45,11 @@ fn suggest_exact_match_returns_none() {
     let store = HistoryStore::open(&db_path).unwrap();
 
     store
-        .record_command("git checkout main", 1000, "/home")
+        .record_command("git checkout main", 1000, "/home", None)
         .unwrap();
 
-    let result = suggest(&store, "git checkout main");
+    let context = SuggestionContext::default();
+    let result = suggest(&store, "git checkout main", &context);
     assert_eq!(result, None);
 }
 
@@ -55,8 +59,33 @@ fn suggest_ls_returns_suffix() {
     let db_path = tmp_dir.path().join("test.db");
     let store = HistoryStore::open(&db_path).unwrap();
 
-    store.record_command("ls -la", 2000, "/home").unwrap();
+    store.record_command("ls -la", 2000, "/home", None).unwrap();
 
-    let result = suggest(&store, "ls");
+    let context = SuggestionContext::default();
+    let result = suggest(&store, "ls", &context);
     assert_eq!(result, Some(" -la".to_string()));
+}
+
+#[test]
+fn suggest_with_context_uses_frecency_ranking() {
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let db_path = tmp_dir.path().join("test.db");
+    let store = HistoryStore::open(&db_path).unwrap();
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+
+    // Record "git checkout main" many times in /proj
+    for i in 0..5 {
+        store.record_command("git checkout main", now - 100 + i, "/proj", Some(0)).unwrap();
+    }
+
+    let context = SuggestionContext {
+        cwd: Some("/proj".to_string()),
+        ..Default::default()
+    };
+    let result = suggest(&store, "git ch", &context);
+    assert_eq!(result, Some("eckout main".to_string()));
 }

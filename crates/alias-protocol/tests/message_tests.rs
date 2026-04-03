@@ -6,6 +6,9 @@ fn serialize_complete_request() {
         id: "r1".to_string(),
         buf: "git ch".to_string(),
         cur: 6,
+        cwd: None,
+        exit_code: None,
+        git_branch: None,
     };
     let json = serde_json::to_string(&request).unwrap();
     assert_eq!(json, r#"{"type":"complete","id":"r1","buf":"git ch","cur":6}"#);
@@ -56,6 +59,9 @@ fn roundtrip_request() {
         id: "r1".to_string(),
         buf: "git ch".to_string(),
         cur: 6,
+        cwd: None,
+        exit_code: None,
+        git_branch: None,
     };
     let json = serde_json::to_string(&request).unwrap();
     let deserialized: Request = serde_json::from_str(&json).unwrap();
@@ -95,6 +101,7 @@ fn serialize_record_request() {
         id: "r1".to_string(),
         cmd: "git status".to_string(),
         cwd: "/home".to_string(),
+        exit_code: None,
     };
     let json = serde_json::to_string(&request).unwrap();
     assert_eq!(
@@ -118,6 +125,7 @@ fn roundtrip_record_request() {
         id: "r1".to_string(),
         cmd: "git status".to_string(),
         cwd: "/home".to_string(),
+        exit_code: None,
     };
     let json = serde_json::to_string(&request).unwrap();
     let deserialized: Request = serde_json::from_str(&json).unwrap();
@@ -139,6 +147,9 @@ fn serialize_generate_request() {
     let request = Request::Generate {
         id: "r1".to_string(),
         prompt: "list files".to_string(),
+        cwd: None,
+        exit_code: None,
+        git_branch: None,
     };
     let json = serde_json::to_string(&request).unwrap();
     assert_eq!(
@@ -156,6 +167,9 @@ fn deserialize_generate_request() {
         Request::Generate {
             id: "r1".to_string(),
             prompt: "list files".to_string(),
+            cwd: None,
+            exit_code: None,
+            git_branch: None,
         }
     );
 }
@@ -165,6 +179,9 @@ fn roundtrip_generate_request() {
     let request = Request::Generate {
         id: "r1".to_string(),
         prompt: "list files".to_string(),
+        cwd: None,
+        exit_code: None,
+        git_branch: None,
     };
     let json = serde_json::to_string(&request).unwrap();
     let deserialized: Request = serde_json::from_str(&json).unwrap();
@@ -206,4 +223,134 @@ fn roundtrip_command_response() {
     let json = serde_json::to_string(&response).unwrap();
     let deserialized: Response = serde_json::from_str(&json).unwrap();
     assert_eq!(deserialized, response);
+}
+
+// --- New backward compatibility tests ---
+
+#[test]
+fn complete_backward_compat_no_context() {
+    let json = r#"{"type":"complete","id":"r1","buf":"git","cur":3}"#;
+    let request: Request = serde_json::from_str(json).unwrap();
+    assert_eq!(
+        request,
+        Request::Complete {
+            id: "r1".to_string(),
+            buf: "git".to_string(),
+            cur: 3,
+            cwd: None,
+            exit_code: None,
+            git_branch: None,
+        }
+    );
+}
+
+#[test]
+fn complete_with_full_context() {
+    let json = r#"{"type":"complete","id":"r1","buf":"git","cur":3,"cwd":"/home","exit_code":0,"git_branch":"main"}"#;
+    let request: Request = serde_json::from_str(json).unwrap();
+    assert_eq!(
+        request,
+        Request::Complete {
+            id: "r1".to_string(),
+            buf: "git".to_string(),
+            cur: 3,
+            cwd: Some("/home".to_string()),
+            exit_code: Some(0),
+            git_branch: Some("main".to_string()),
+        }
+    );
+}
+
+#[test]
+fn record_backward_compat_no_exit_code() {
+    let json = r#"{"type":"record","id":"r1","cmd":"ls","cwd":"/home"}"#;
+    let request: Request = serde_json::from_str(json).unwrap();
+    assert_eq!(
+        request,
+        Request::Record {
+            id: "r1".to_string(),
+            cmd: "ls".to_string(),
+            cwd: "/home".to_string(),
+            exit_code: None,
+        }
+    );
+}
+
+#[test]
+fn record_with_exit_code() {
+    let json = r#"{"type":"record","id":"r1","cmd":"ls","cwd":"/home","exit_code":1}"#;
+    let request: Request = serde_json::from_str(json).unwrap();
+    assert_eq!(
+        request,
+        Request::Record {
+            id: "r1".to_string(),
+            cmd: "ls".to_string(),
+            cwd: "/home".to_string(),
+            exit_code: Some(1),
+        }
+    );
+}
+
+#[test]
+fn generate_backward_compat_no_context() {
+    let json = r#"{"type":"generate","id":"r1","prompt":"list files"}"#;
+    let request: Request = serde_json::from_str(json).unwrap();
+    assert_eq!(
+        request,
+        Request::Generate {
+            id: "r1".to_string(),
+            prompt: "list files".to_string(),
+            cwd: None,
+            exit_code: None,
+            git_branch: None,
+        }
+    );
+}
+
+#[test]
+fn generate_with_full_context() {
+    let json = r#"{"type":"generate","id":"r1","prompt":"list files","cwd":"/proj","exit_code":0,"git_branch":"dev"}"#;
+    let request: Request = serde_json::from_str(json).unwrap();
+    assert_eq!(
+        request,
+        Request::Generate {
+            id: "r1".to_string(),
+            prompt: "list files".to_string(),
+            cwd: Some("/proj".to_string()),
+            exit_code: Some(0),
+            git_branch: Some("dev".to_string()),
+        }
+    );
+}
+
+#[test]
+fn complete_none_context_omitted_from_json() {
+    let request = Request::Complete {
+        id: "r1".to_string(),
+        buf: "git".to_string(),
+        cur: 3,
+        cwd: None,
+        exit_code: None,
+        git_branch: None,
+    };
+    let json = serde_json::to_string(&request).unwrap();
+    assert!(!json.contains("cwd"));
+    assert!(!json.contains("exit_code"));
+    assert!(!json.contains("git_branch"));
+}
+
+#[test]
+fn complete_with_context_includes_fields_in_json() {
+    let request = Request::Complete {
+        id: "r1".to_string(),
+        buf: "git".to_string(),
+        cur: 3,
+        cwd: Some("/home".to_string()),
+        exit_code: Some(0),
+        git_branch: Some("main".to_string()),
+    };
+    let json = serde_json::to_string(&request).unwrap();
+    assert!(json.contains(r#""cwd":"/home""#));
+    assert!(json.contains(r#""exit_code":0"#));
+    assert!(json.contains(r#""git_branch":"main""#));
 }

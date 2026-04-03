@@ -7,7 +7,7 @@ use tokio::net::UnixStream;
 use tokio_util::sync::CancellationToken;
 
 use alias_core::ai::AiBackend;
-use alias_core::history::HistoryStore;
+use alias_core::history::{HistoryStore, SuggestionContext};
 use alias_protocol::{Request, Response};
 
 /// Handles a single client connection, reading NDJSON requests and writing responses.
@@ -67,6 +67,34 @@ pub async fn handle_connection(
     Ok(())
 }
 
+/// Builds an enriched prompt string by prepending environmental context.
+///
+/// If context fields are present, they are added as a [Context] block
+/// before the user's prompt text.
+pub fn enrich_prompt(
+    prompt: &str,
+    cwd: Option<&str>,
+    exit_code: Option<i32>,
+    git_branch: Option<&str>,
+) -> String {
+    let mut parts = Vec::new();
+    if let Some(dir) = cwd {
+        parts.push(format!("Current directory: {}", dir));
+    }
+    if let Some(code) = exit_code {
+        if code != 0 {
+            parts.push(format!("Last command failed with exit code: {}", code));
+        }
+    }
+    if let Some(branch) = git_branch {
+        parts.push(format!("Git branch: {}", branch));
+    }
+    if parts.is_empty() {
+        return prompt.to_string();
+    }
+    format!("[Context]\n{}\n\n{}", parts.join("\n"), prompt)
+}
+
 /// Dispatches a parsed request to the appropriate handler.
 async fn dispatch_request(
     request: Request,
@@ -78,36 +106,68 @@ async fn dispatch_request(
             id,
             v: env!("CARGO_PKG_VERSION").to_string(),
         },
-        Request::Complete { id, buf, cur: _ } => {
+        Request::Complete {
+            id,
+            buf,
+            cur: _,
+            cwd,
+            exit_code,
+            git_branch,
+        } => {
             let store_guard = store.lock().unwrap();
-            let suggestion_text = alias_core::suggest(&store_guard, &buf).unwrap_or_default();
+            let context = SuggestionContext {
+                cwd,
+                exit_code,
+                git_branch,
+            };
+            let suggestion_text =
+                alias_core::suggest(&store_guard, &buf, &context).unwrap_or_default();
             Response::Suggestion {
                 id,
                 text: suggestion_text,
             }
         }
-        Request::Record { id, cmd, cwd } => {
+        Request::Record {
+            id,
+            cmd,
+            cwd,
+            exit_code,
+        } => {
             let store_guard = store.lock().unwrap();
             let timestamp = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
                 .as_secs() as i64;
-            if let Err(err) = store_guard.record_command(&cmd, timestamp, &cwd) {
+            if let Err(err) = store_guard.record_command(&cmd, timestamp, &cwd, exit_code) {
                 tracing::error!("Failed to record command: {err}");
             }
             Response::Ack { id }
         }
-        Request::Generate { id, prompt } => match ai_backend {
-            Some(backend) => match backend.generate(&prompt).await {
-                Ok(command_text) => Response::Command {
-                    id,
-                    text: command_text,
-                },
-                Err(err) => Response::Error {
-                    id,
-                    msg: err.to_string(),
-                },
-            },
+        Request::Generate {
+            id,
+            prompt,
+            cwd,
+            exit_code,
+            git_branch,
+        } => match ai_backend {
+            Some(backend) => {
+                let enriched = enrich_prompt(
+                    &prompt,
+                    cwd.as_deref(),
+                    exit_code,
+                    git_branch.as_deref(),
+                );
+                match backend.generate(&enriched).await {
+                    Ok(command_text) => Response::Command {
+                        id,
+                        text: command_text,
+                    },
+                    Err(err) => Response::Error {
+                        id,
+                        msg: err.to_string(),
+                    },
+                }
+            }
             None => Response::Error {
                 id,
                 msg: "No AI model configured. Set ALIAS_NL_MODEL env var.".to_string(),

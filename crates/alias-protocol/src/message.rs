@@ -13,6 +13,15 @@ pub enum Request {
         buf: String,
         /// Cursor position within the buffer.
         cur: u32,
+        /// Current working directory for context-aware ranking.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cwd: Option<String>,
+        /// Exit code of the last command for ranking adjustment.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        exit_code: Option<i32>,
+        /// Current git branch for context-aware ranking.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        git_branch: Option<String>,
     },
 
     /// Ping the daemon to check if it is alive.
@@ -31,6 +40,9 @@ pub enum Request {
         cmd: String,
         /// Working directory where the command was run.
         cwd: String,
+        /// Exit code of the recorded command.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        exit_code: Option<i32>,
     },
 
     /// Request to generate a shell command from natural language.
@@ -40,6 +52,15 @@ pub enum Request {
         id: String,
         /// Natural language prompt describing the desired command.
         prompt: String,
+        /// Current working directory for context-aware generation.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cwd: Option<String>,
+        /// Exit code of the last command for context.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        exit_code: Option<i32>,
+        /// Current git branch for context-aware generation.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        git_branch: Option<String>,
     },
 }
 
