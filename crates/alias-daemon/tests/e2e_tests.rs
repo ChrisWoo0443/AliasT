@@ -7,14 +7,36 @@
 
 use std::sync::{Arc, Mutex};
 
+use async_trait::async_trait;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio::time::{timeout, Duration};
 use tokio_util::sync::CancellationToken;
 
+use alias_core::ai::{AiBackend, AiError};
 use alias_core::history::HistoryStore;
 use alias_daemon::server;
 use alias_protocol::Response;
+
+/// Mock AI backend that returns a fixed response for testing.
+struct MockAiBackend {
+    response: String,
+}
+
+#[async_trait]
+impl AiBackend for MockAiBackend {
+    async fn generate(&self, _prompt: &str) -> Result<String, AiError> {
+        Ok(self.response.clone())
+    }
+
+    async fn health_check(&self) -> Result<(), AiError> {
+        Ok(())
+    }
+
+    fn name(&self) -> &str {
+        "mock"
+    }
+}
 
 /// Start daemon on a temp socket with a fresh HistoryStore, returning path,
 /// cancel token, and temp dir guard.
@@ -31,6 +53,33 @@ async fn spawn_daemon() -> (std::path::PathBuf, CancellationToken, tempfile::Tem
     let server_token = cancel_token.clone();
     tokio::spawn(async move {
         server::run_server(&server_path, server_token, shared_store, None)
+            .await
+            .unwrap();
+    });
+
+    // Wait for server to bind the socket
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    (socket_path, cancel_token, temp_dir)
+}
+
+/// Start daemon on a temp socket with a mock AI backend, returning path,
+/// cancel token, and temp dir guard.
+async fn spawn_daemon_with_ai(
+    backend: Arc<dyn AiBackend>,
+) -> (std::path::PathBuf, CancellationToken, tempfile::TempDir) {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let socket_path = temp_dir.path().join("alias.sock");
+    let db_path = temp_dir.path().join("history.db");
+    let cancel_token = CancellationToken::new();
+
+    let store = HistoryStore::open(&db_path).unwrap();
+    let shared_store = Arc::new(Mutex::new(store));
+
+    let server_path = socket_path.clone();
+    let server_token = cancel_token.clone();
+    tokio::spawn(async move {
+        server::run_server(&server_path, server_token, shared_store, Some(backend))
             .await
             .unwrap();
     });
@@ -213,6 +262,65 @@ async fn test_multiple_clients() {
                 }
                 other => panic!("client 2: expected Suggestion, got {:?}", other),
             }
+        }
+    })
+    .await;
+
+    cancel_token.cancel();
+    assert!(result.is_ok(), "test timed out");
+}
+
+#[tokio::test]
+async fn test_generate_returns_command() {
+    let mock_backend = Arc::new(MockAiBackend {
+        response: "ls -la".to_string(),
+    });
+    let (socket_path, cancel_token, _temp_dir) = spawn_daemon_with_ai(mock_backend).await;
+
+    let result = timeout(Duration::from_secs(5), async {
+        let mut stream = UnixStream::connect(&socket_path).await.unwrap();
+        let response = send_ndjson(
+            &mut stream,
+            r#"{"type":"generate","id":"g1","prompt":"list files"}"#,
+        )
+        .await;
+
+        match response {
+            Response::Command { id, text } => {
+                assert_eq!(id, "g1");
+                assert_eq!(text, "ls -la");
+            }
+            other => panic!("expected Command response, got: {:?}", other),
+        }
+    })
+    .await;
+
+    cancel_token.cancel();
+    assert!(result.is_ok(), "test timed out");
+}
+
+#[tokio::test]
+async fn test_generate_no_backend_returns_error() {
+    let (socket_path, cancel_token, _temp_dir) = spawn_daemon().await;
+
+    let result = timeout(Duration::from_secs(5), async {
+        let mut stream = UnixStream::connect(&socket_path).await.unwrap();
+        let response = send_ndjson(
+            &mut stream,
+            r#"{"type":"generate","id":"g2","prompt":"hello"}"#,
+        )
+        .await;
+
+        match response {
+            Response::Error { id, msg } => {
+                assert_eq!(id, "g2");
+                assert!(
+                    msg.contains("No AI model configured"),
+                    "expected model error, got: {}",
+                    msg
+                );
+            }
+            other => panic!("expected Error response, got: {:?}", other),
         }
     })
     .await;
