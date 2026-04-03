@@ -62,11 +62,12 @@ Plans:
   3. Generated command appears in the editable buffer -- never auto-executes
   4. User can accept (Enter), edit inline, or reject (Escape) the generated command
   5. Ollama backend works without any API key configuration for local-first AI
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 03-01: TBD
-- [ ] 03-02: TBD
+- [ ] 03-01-PLAN.md -- Protocol types (Generate/Command), AiBackend trait, OllamaBackend with reqwest
+- [ ] 03-02-PLAN.md -- Daemon wiring: AI backend init, connection handler Generate dispatch, E2E tests
+- [ ] 03-03-PLAN.md -- Zsh plugin NL mode: Ctrl+Space toggle, spinner, accept/reject keybindings
 
 ### Phase 4: Context & Ranking Intelligence
 **Goal**: Suggestions are smarter -- ranked by usage patterns and enriched with environmental context
@@ -103,6 +104,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 |-------|----------------|--------|-----------|
 | 1. Daemon + IPC + Ghost Text | 3/3 | Complete | 2026-04-02 |
 | 2. History-Based Suggestions | 0/3 | Planning complete | - |
-| 3. Natural Language Mode | 0/0 | Not started | - |
+| 3. Natural Language Mode | 0/3 | Planning complete | - |
 | 4. Context & Ranking Intelligence | 0/0 | Not started | - |
 | 5. Cloud Backends & Terminal Compatibility | 0/0 | Not started | - |
