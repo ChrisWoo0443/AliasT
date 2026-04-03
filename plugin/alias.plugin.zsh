@@ -112,20 +112,30 @@ _alias_self_insert_wrapper() {
 }
 zle -N self-insert _alias_self_insert_wrapper
 
-_alias_nl_accept() {
-  if [[ "$_ALIAS_NL_STATE" == "review" || "$_ALIAS_NL_STATE" == "input" ]]; then
-    # Exit NL mode, then accept the line
-    _ALIAS_NL_STATE="inactive"
-    _ALIAS_NL_PROMPT=""
-    PREDISPLAY=""
-    zle .accept-line
-  else
-    # Normal accept-line behavior (clears ghost first)
-    _alias_clear_ghost
-    zle .accept-line
-  fi
+_alias_nl_aware_accept() {
+  case "$_ALIAS_NL_STATE" in
+    input)
+      # Enter in NL input mode → generate command
+      if [[ -z "$BUFFER" ]]; then
+        return  # Empty prompt, do nothing
+      fi
+      _ALIAS_NL_STATE="generating"
+      _alias_nl_generate
+      ;;
+    review)
+      # Enter on generated command → execute it, then stay in NL mode
+      PREDISPLAY=""
+      zle .accept-line
+      # precmd will fire, then we re-enter NL input mode
+      ;;
+    *)
+      # Normal mode — clear ghost, accept line
+      _alias_clear_ghost
+      zle .accept-line
+      ;;
+  esac
 }
-zle -N accept-line _alias_nl_accept
+zle -N accept-line _alias_nl_aware_accept
 
 # ── 7. Accept keybindings ───────────────────────────────────────────
 _alias_accept_suggestion() {
@@ -196,6 +206,9 @@ _alias_nl_generate() {
   local tmpfile
   tmpfile=$(mktemp "${TMPDIR:-/tmp}/alias-nl.XXXXXX")
 
+  # Disable job control to suppress [1] pid / [1] + done noise
+  setopt local_options no_monitor
+
   # Background: open NEW connection, send generate request, write response
   {
     zmodload zsh/net/socket 2>/dev/null
@@ -210,7 +223,6 @@ _alias_nl_generate() {
     (( _ALIAS_REQ_ID++ ))
     local escaped="${prompt//\\/\\\\}"
     escaped="${escaped//\"/\\\"}"
-    # Remove newlines from prompt
     escaped="${escaped//$'\n'/ }"
     local msg="{\"id\":\"r${_ALIAS_REQ_ID}\",\"type\":\"generate\",\"prompt\":\"${escaped}\"}"
     print -u $bg_fd "$msg" 2>/dev/null || { echo "error:send" > "$tmpfile"; exec {bg_fd}>&-; exit 1; }
@@ -222,24 +234,28 @@ _alias_nl_generate() {
   } &
   local bg_pid=$!
 
-  # Foreground: spinner animation using zle -R (works in widget context)
+  # Foreground: spinner — clear buffer and show spinner in PREDISPLAY
+  BUFFER=""
+  CURSOR=0
   local spinner_chars='/-\|'
   local frame=0
-  PREDISPLAY="[/] "
-  zle -R
 
   while kill -0 $bg_pid 2>/dev/null; do
     PREDISPLAY="[${spinner_chars:$((frame % 4)):1}] "
+    BUFFER=""
     zle -R
-    # Brief sleep to control animation speed (~10fps)
-    if read -t 0.1 -k 1 key < /dev/tty 2>/dev/null; then
-      if [[ "$key" == $'\e' ]]; then
-        kill $bg_pid 2>/dev/null
-        wait $bg_pid 2>/dev/null
-        rm -f "$tmpfile"
-        _alias_nl_deactivate
-        return
-      fi
+    read -t 0.1 -k 1 key < /dev/tty 2>/dev/null
+    if [[ "$key" == $'\e' ]]; then
+      kill $bg_pid 2>/dev/null
+      wait $bg_pid 2>/dev/null
+      rm -f "$tmpfile"
+      # Back to NL input
+      _ALIAS_NL_STATE="input"
+      PREDISPLAY="[NL] "
+      BUFFER=""
+      CURSOR=0
+      zle -R
+      return
     fi
     ((frame++))
   done
@@ -299,41 +315,32 @@ _alias_nl_generate() {
 }
 
 _alias_nl_toggle() {
-  case "$_ALIAS_NL_STATE" in
-    inactive)
-      # Enter NL mode
-      _ALIAS_NL_STATE="input"
-      _alias_clear_ghost  # Suspend ghost text suggestions
-      PREDISPLAY="[NL] "
-      BUFFER=""
-      CURSOR=0
-      zle -R
-      ;;
-    input)
-      # User typed a prompt, trigger generation
-      if [[ -z "$BUFFER" ]]; then
-        _alias_nl_deactivate
-        return
-      fi
-      _ALIAS_NL_STATE="generating"
-      _alias_nl_generate
-      ;;
-    review)
-      # Regenerate with the same prompt
-      _ALIAS_NL_STATE="generating"
-      BUFFER=""
-      _alias_nl_generate
-      ;;
-    generating)
-      # Already generating, ignore
-      ;;
-  esac
+  if [[ "$_ALIAS_NL_STATE" == "inactive" ]]; then
+    # Toggle ON — enter NL mode
+    _ALIAS_NL_STATE="input"
+    _alias_clear_ghost
+    PREDISPLAY="[NL] "
+    BUFFER=""
+    CURSOR=0
+    zle -R
+  else
+    # Toggle OFF — exit NL mode entirely
+    _alias_nl_deactivate
+  fi
 }
 zle -N _alias_nl_toggle
 bindkey '^ ' _alias_nl_toggle
 
 _alias_nl_escape() {
-  if [[ "$_ALIAS_NL_STATE" != "inactive" ]]; then
+  if [[ "$_ALIAS_NL_STATE" == "review" ]]; then
+    # Escape in review → back to NL input (clear generated command)
+    _ALIAS_NL_STATE="input"
+    BUFFER=""
+    CURSOR=0
+    PREDISPLAY="[NL] "
+    zle -R
+  elif [[ "$_ALIAS_NL_STATE" != "inactive" ]]; then
+    # Escape in input → exit NL mode
     _alias_nl_deactivate
   else
     zle send-break
@@ -342,7 +349,26 @@ _alias_nl_escape() {
 zle -N _alias_nl_escape
 bindkey '\e' _alias_nl_escape
 
-# ── 10. Command recording (precmd hook) ────────────────────────────
+# ── 10. NL mode persistence (re-enter after command execution) ─────
+_alias_nl_precmd() {
+  # If we just executed a command from NL review state, re-enter NL input
+  if [[ "$_ALIAS_NL_STATE" == "review" ]]; then
+    _ALIAS_NL_STATE="input"
+    _ALIAS_NL_PROMPT=""
+    # PREDISPLAY will be set when ZLE starts for the next prompt
+  fi
+}
+add-zsh-hook precmd _alias_nl_precmd
+
+# Re-apply [NL] prefix when ZLE starts a new line (after precmd)
+_alias_nl_line_init() {
+  if [[ "$_ALIAS_NL_STATE" == "input" ]]; then
+    PREDISPLAY="[NL] "
+  fi
+}
+add-zle-hook-widget zle-line-init _alias_nl_line_init
+
+# ── 11. Command recording (precmd hook) ────────────────────────────
 _alias_precmd_record() {
   # Get the most recent history entry number and command via fc
   local fc_out
@@ -376,7 +402,7 @@ _alias_precmd_record() {
 autoload -Uz add-zsh-hook
 add-zsh-hook precmd _alias_precmd_record
 
-# ── 11. Compatibility detection ─────────────────────────────────────
+# ── 12. Compatibility detection ─────────────────────────────────────
 if (( ${+_ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE} )) || [[ -n "${functions[_zsh_autosuggest_suggest]}" ]]; then
   print "alias: zsh-autosuggestions detected. Ghost text may conflict." >&2
 fi
