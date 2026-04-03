@@ -93,7 +93,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 05-01-PLAN.md -- ClaudeBackend and OpenAiBackend implementing AiBackend trait, daemon backend selection via ALIAS_NL_BACKEND
+- [x] 05-01-PLAN.md -- ClaudeBackend and OpenAiBackend implementing AiBackend trait, daemon backend selection via ALIAS_NL_BACKEND
 - [ ] 05-02-PLAN.md -- Style presets (dark/light/solarized) for ghost text, terminal compatibility verification
 
 ## Progress

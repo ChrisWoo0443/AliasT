@@ -30,7 +30,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **NL-03**: Generated command appears in editable buffer for review -- never auto-executes
 - [ ] **NL-04**: User can accept (Enter), edit, or reject (Escape) generated commands
 - [x] **NL-05**: Ollama backend works out of the box for local-first AI (no API keys required)
-- [ ] **NL-06**: Cloud AI backends supported (Claude API, OpenAI API) via API key configuration
+- [x] **NL-06**: Cloud AI backends supported (Claude API, OpenAI API) via API key configuration
 - [x] **NL-07**: AI backend is abstracted behind a trait so backends are swappable via config
 
 ### Terminal Compatibility
@@ -91,7 +91,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | NL-03 | Phase 3 | Pending |
 | NL-04 | Phase 3 | Pending |
 | NL-05 | Phase 3 | Complete |
-| NL-06 | Phase 5 | Pending |
+| NL-06 | Phase 5 | Complete |
 | NL-07 | Phase 3 | Complete |
 | TERM-01 | Phase 5 | Pending |
 | TERM-02 | Phase 5 | Pending |
