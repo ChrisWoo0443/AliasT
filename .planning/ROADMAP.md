@@ -48,7 +48,7 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 02-01-PLAN.md -- HistoryStore with SQLite prefix search, zsh history parser, Record/Ack protocol messages, rewired suggest()
+- [x] 02-01-PLAN.md -- HistoryStore with SQLite prefix search, zsh history parser, Record/Ack protocol messages, rewired suggest()
 - [ ] 02-02-PLAN.md -- Daemon integration: SQLite init on startup, history import, connection handler wiring for Record and Complete
 - [ ] 02-03-PLAN.md -- Zsh plugin Tab/Shift+Tab keybindings, precmd command recording hook, interactive verification
 
