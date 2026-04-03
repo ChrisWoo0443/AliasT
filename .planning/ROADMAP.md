@@ -42,14 +42,15 @@ Plans:
 **Requirements**: SUGG-01, SUGG-02, SUGG-03, SUGG-06
 **Success Criteria** (what must be TRUE):
   1. User types a partial command and sees a ghost-text suggestion from shell history within 100ms
-  2. User presses Tab or Right-arrow and the full suggestion is accepted into the command buffer
-  3. User presses Alt+Right and the suggestion is accepted one word at a time
-  4. Shell history is imported and indexed in SQLite with metadata (command, timestamp, cwd, exit code, duration)
-**Plans**: TBD
+  2. User presses Tab and the full suggestion is accepted into the command buffer
+  3. User presses Shift+Tab and the suggestion is accepted one word at a time
+  4. Shell history is imported and indexed in SQLite with metadata (command, timestamp, cwd)
+**Plans**: 3 plans
 
 Plans:
-- [ ] 02-01: TBD
-- [ ] 02-02: TBD
+- [ ] 02-01-PLAN.md -- HistoryStore with SQLite prefix search, zsh history parser, Record/Ack protocol messages, rewired suggest()
+- [ ] 02-02-PLAN.md -- Daemon integration: SQLite init on startup, history import, connection handler wiring for Record and Complete
+- [ ] 02-03-PLAN.md -- Zsh plugin Tab/Shift+Tab keybindings, precmd command recording hook, interactive verification
 
 ### Phase 3: Natural Language Mode
 **Goal**: Users can describe what they want in plain English and get a generated shell command for review, powered by a local LLM
@@ -100,8 +101,8 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Daemon + IPC + Ghost Text | 0/3 | Planning complete | - |
-| 2. History-Based Suggestions | 0/0 | Not started | - |
+| 1. Daemon + IPC + Ghost Text | 3/3 | Complete | 2026-04-02 |
+| 2. History-Based Suggestions | 0/3 | Planning complete | - |
 | 3. Natural Language Mode | 0/0 | Not started | - |
 | 4. Context & Ranking Intelligence | 0/0 | Not started | - |
 | 5. Cloud Backends & Terminal Compatibility | 0/0 | Not started | - |
