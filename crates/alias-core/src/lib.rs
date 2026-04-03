@@ -1,3 +1,5 @@
+pub mod history;
+
 /// Returns a hardcoded completion suggestion for the given command buffer.
 ///
 /// This is a Phase 1 placeholder that provides static suggestions for

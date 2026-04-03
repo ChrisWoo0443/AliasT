@@ -88,3 +88,48 @@ fn unknown_message_type_returns_protocol_error() {
     let result = serde_json::from_str::<Request>(unknown_type_json);
     assert!(result.is_err(), "Expected error for unknown message type");
 }
+
+#[test]
+fn serialize_record_request() {
+    let request = Request::Record {
+        id: "r1".to_string(),
+        cmd: "git status".to_string(),
+        cwd: "/home".to_string(),
+    };
+    let json = serde_json::to_string(&request).unwrap();
+    assert_eq!(
+        json,
+        r#"{"type":"record","id":"r1","cmd":"git status","cwd":"/home"}"#
+    );
+}
+
+#[test]
+fn serialize_ack_response() {
+    let response = Response::Ack {
+        id: "r1".to_string(),
+    };
+    let json = serde_json::to_string(&response).unwrap();
+    assert_eq!(json, r#"{"type":"ack","id":"r1"}"#);
+}
+
+#[test]
+fn roundtrip_record_request() {
+    let request = Request::Record {
+        id: "r1".to_string(),
+        cmd: "git status".to_string(),
+        cwd: "/home".to_string(),
+    };
+    let json = serde_json::to_string(&request).unwrap();
+    let deserialized: Request = serde_json::from_str(&json).unwrap();
+    assert_eq!(deserialized, request);
+}
+
+#[test]
+fn roundtrip_ack_response() {
+    let response = Response::Ack {
+        id: "r1".to_string(),
+    };
+    let json = serde_json::to_string(&response).unwrap();
+    let deserialized: Response = serde_json::from_str(&json).unwrap();
+    assert_eq!(deserialized, response);
+}

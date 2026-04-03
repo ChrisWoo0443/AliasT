@@ -5,3 +5,7 @@ edition = "2024"
 
 [dependencies]
 alias-protocol = { path = "../alias-protocol" }
+rusqlite = { version = "0.39", features = ["bundled"] }
+
+[dev-dependencies]
+tempfile = "3"

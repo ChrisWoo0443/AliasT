@@ -21,6 +21,17 @@ pub enum Request {
         /// Unique request identifier.
         id: String,
     },
+
+    /// Record a command execution from the precmd hook.
+    #[serde(rename = "record")]
+    Record {
+        /// Unique request identifier.
+        id: String,
+        /// The command that was executed.
+        cmd: String,
+        /// Working directory where the command was run.
+        cwd: String,
+    },
 }
 
 /// Responses sent from the daemon to the zsh plugin.
@@ -52,5 +63,12 @@ pub enum Response {
         id: String,
         /// Human-readable error message.
         msg: String,
+    },
+
+    /// Acknowledgement response for record requests.
+    #[serde(rename = "ack")]
+    Ack {
+        /// Request identifier this response corresponds to.
+        id: String,
     },
 }
