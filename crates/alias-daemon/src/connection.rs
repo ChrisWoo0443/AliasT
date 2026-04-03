@@ -1,18 +1,23 @@
+use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use anyhow::Result;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio_util::sync::CancellationToken;
 
+use alias_core::history::HistoryStore;
 use alias_protocol::{Request, Response};
 
 /// Handles a single client connection, reading NDJSON requests and writing responses.
 ///
 /// Each line is parsed as a JSON `Request`. The handler dispatches to the
-/// appropriate logic (ping, complete) and writes back a JSON `Response` line.
+/// appropriate logic (ping, complete, record) and writes back a JSON `Response` line.
 /// Exits when the connection is closed or the cancellation token fires.
 pub async fn handle_connection(
     stream: UnixStream,
     cancel_token: CancellationToken,
+    store: Arc<Mutex<HistoryStore>>,
 ) -> Result<()> {
     let (reader, mut writer) = stream.into_split();
     let mut buf_reader = BufReader::new(reader);
@@ -42,7 +47,7 @@ pub async fn handle_connection(
                 }
 
                 let response = match serde_json::from_str::<Request>(trimmed) {
-                    Ok(request) => dispatch_request(request),
+                    Ok(request) => dispatch_request(request, &store),
                     Err(parse_error) => Response::Error {
                         id: "unknown".to_string(),
                         msg: parse_error.to_string(),
@@ -61,18 +66,30 @@ pub async fn handle_connection(
 }
 
 /// Dispatches a parsed request to the appropriate handler.
-fn dispatch_request(request: Request) -> Response {
+fn dispatch_request(request: Request, store: &Arc<Mutex<HistoryStore>>) -> Response {
     match request {
         Request::Ping { id } => Response::Pong {
             id,
             v: env!("CARGO_PKG_VERSION").to_string(),
         },
         Request::Complete { id, buf, cur: _ } => {
-            let suggestion_text = alias_core::suggest(&buf).unwrap_or_default();
+            let store_guard = store.lock().unwrap();
+            let suggestion_text = alias_core::suggest(&store_guard, &buf).unwrap_or_default();
             Response::Suggestion {
                 id,
                 text: suggestion_text,
             }
+        }
+        Request::Record { id, cmd, cwd } => {
+            let store_guard = store.lock().unwrap();
+            let timestamp = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as i64;
+            if let Err(err) = store_guard.record_command(&cmd, timestamp, &cwd) {
+                tracing::error!("Failed to record command: {err}");
+            }
+            Response::Ack { id }
         }
     }
 }

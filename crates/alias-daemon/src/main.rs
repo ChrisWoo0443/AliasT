@@ -1,10 +1,13 @@
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use tokio::signal::unix::{signal, SignalKind};
 use tokio_util::sync::CancellationToken;
 use tracing_subscriber::EnvFilter;
+
+use alias_core::history::{parse_history_file, HistoryStore};
 
 mod connection;
 mod lifecycle;
@@ -75,11 +78,58 @@ async fn main() -> Result<()> {
             let socket_path = socket.unwrap_or_else(lifecycle::default_socket_path);
             tracing::info!(?socket_path, "starting daemon");
 
+            // Initialize HistoryStore at ~/.local/share/alias/history.db
+            let data_dir = directories::BaseDirs::new()
+                .map(|dirs| dirs.data_local_dir().join("alias"))
+                .unwrap_or_else(|| {
+                    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+                    PathBuf::from(home).join(".local").join("share").join("alias")
+                });
+            std::fs::create_dir_all(&data_dir)?;
+            let db_path = data_dir.join("history.db");
+
+            let store = HistoryStore::open(&db_path)?;
+            tracing::info!(?db_path, "opened history database");
+
+            // Auto-import zsh history when database is empty
+            if store.count()? == 0 {
+                let home = std::env::var("HOME").unwrap_or_default();
+                let zsh_history_path = PathBuf::from(&home).join(".zsh_history");
+                if zsh_history_path.exists() {
+                    match std::fs::read_to_string(&zsh_history_path) {
+                        Ok(content) => {
+                            let mut entries = parse_history_file(&content);
+                            // Assign synthetic timestamps to entries missing them
+                            for (index, entry) in entries.iter_mut().enumerate() {
+                                if entry.timestamp.is_none() {
+                                    entry.timestamp = Some((index + 1) as i64);
+                                }
+                            }
+                            match store.import_entries(&entries) {
+                                Ok(count) => {
+                                    tracing::info!(count, "imported zsh history entries");
+                                }
+                                Err(err) => {
+                                    tracing::error!("failed to import zsh history: {err}");
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            tracing::error!("failed to read zsh history file: {err}");
+                        }
+                    }
+                } else {
+                    tracing::debug!("no zsh history file found, starting with empty database");
+                }
+            }
+
+            let shared_store = Arc::new(Mutex::new(store));
+
             let cancel_token = CancellationToken::new();
             let server_token = cancel_token.clone();
 
             let server_handle = tokio::spawn(async move {
-                server::run_server(&socket_path, server_token).await
+                server::run_server(&socket_path, server_token, shared_store).await
             });
 
             // Wait for shutdown signals
