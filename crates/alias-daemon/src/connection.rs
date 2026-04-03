@@ -91,5 +91,12 @@ fn dispatch_request(request: Request, store: &Arc<Mutex<HistoryStore>>) -> Respo
             }
             Response::Ack { id }
         }
+        Request::Generate { id, prompt: _ } => {
+            // Placeholder: AI generation will be wired in Plan 03-02
+            Response::Error {
+                id,
+                msg: "generate not yet implemented".to_string(),
+            }
+        }
     }
 }

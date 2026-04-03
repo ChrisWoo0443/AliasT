@@ -1,3 +1,4 @@
+pub mod ai;
 pub mod history;
 
 use history::HistoryStore;

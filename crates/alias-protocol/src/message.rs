@@ -32,6 +32,15 @@ pub enum Request {
         /// Working directory where the command was run.
         cwd: String,
     },
+
+    /// Request to generate a shell command from natural language.
+    #[serde(rename = "generate")]
+    Generate {
+        /// Unique request identifier.
+        id: String,
+        /// Natural language prompt describing the desired command.
+        prompt: String,
+    },
 }
 
 /// Responses sent from the daemon to the zsh plugin.
@@ -70,5 +79,14 @@ pub enum Response {
     Ack {
         /// Request identifier this response corresponds to.
         id: String,
+    },
+
+    /// Generated shell command from natural language input.
+    #[serde(rename = "command")]
+    Command {
+        /// Request identifier this response corresponds to.
+        id: String,
+        /// The generated shell command text.
+        text: String,
     },
 }

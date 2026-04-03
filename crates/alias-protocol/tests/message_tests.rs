@@ -133,3 +133,77 @@ fn roundtrip_ack_response() {
     let deserialized: Response = serde_json::from_str(&json).unwrap();
     assert_eq!(deserialized, response);
 }
+
+#[test]
+fn serialize_generate_request() {
+    let request = Request::Generate {
+        id: "r1".to_string(),
+        prompt: "list files".to_string(),
+    };
+    let json = serde_json::to_string(&request).unwrap();
+    assert_eq!(
+        json,
+        r#"{"type":"generate","id":"r1","prompt":"list files"}"#
+    );
+}
+
+#[test]
+fn deserialize_generate_request() {
+    let json = r#"{"type":"generate","id":"r1","prompt":"list files"}"#;
+    let request: Request = serde_json::from_str(json).unwrap();
+    assert_eq!(
+        request,
+        Request::Generate {
+            id: "r1".to_string(),
+            prompt: "list files".to_string(),
+        }
+    );
+}
+
+#[test]
+fn roundtrip_generate_request() {
+    let request = Request::Generate {
+        id: "r1".to_string(),
+        prompt: "list files".to_string(),
+    };
+    let json = serde_json::to_string(&request).unwrap();
+    let deserialized: Request = serde_json::from_str(&json).unwrap();
+    assert_eq!(deserialized, request);
+}
+
+#[test]
+fn serialize_command_response() {
+    let response = Response::Command {
+        id: "r1".to_string(),
+        text: "ls -la".to_string(),
+    };
+    let json = serde_json::to_string(&response).unwrap();
+    assert_eq!(
+        json,
+        r#"{"type":"command","id":"r1","text":"ls -la"}"#
+    );
+}
+
+#[test]
+fn deserialize_command_response() {
+    let json = r#"{"type":"command","id":"r1","text":"ls -la"}"#;
+    let response: Response = serde_json::from_str(json).unwrap();
+    assert_eq!(
+        response,
+        Response::Command {
+            id: "r1".to_string(),
+            text: "ls -la".to_string(),
+        }
+    );
+}
+
+#[test]
+fn roundtrip_command_response() {
+    let response = Response::Command {
+        id: "r1".to_string(),
+        text: "ls -la".to_string(),
+    };
+    let json = serde_json::to_string(&response).unwrap();
+    let deserialized: Response = serde_json::from_str(&json).unwrap();
+    assert_eq!(deserialized, response);
+}

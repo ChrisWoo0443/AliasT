@@ -6,6 +6,12 @@ edition = "2024"
 [dependencies]
 alias-protocol = { path = "../alias-protocol" }
 rusqlite = { version = "0.39", features = ["bundled"] }
+async-trait = "0.1"
+reqwest = { version = "0.13", features = ["json"] }
+thiserror = "2.0"
+tokio = { version = "1.50", features = ["rt"] }
+serde = { version = "1.0", features = ["derive"] }
 
 [dev-dependencies]
 tempfile = "3"
+tokio = { version = "1.50", features = ["full"] }
