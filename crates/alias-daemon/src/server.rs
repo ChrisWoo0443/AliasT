@@ -5,6 +5,7 @@ use anyhow::Result;
 use tokio::net::UnixListener;
 use tokio_util::sync::CancellationToken;
 
+use alias_core::ai::AiBackend;
 use alias_core::history::HistoryStore;
 
 use crate::connection::handle_connection;
@@ -19,6 +20,7 @@ pub async fn run_server(
     socket_path: &Path,
     cancel_token: CancellationToken,
     store: Arc<Mutex<HistoryStore>>,
+    ai_backend: Option<Arc<dyn AiBackend>>,
 ) -> Result<()> {
     lifecycle::cleanup_stale_socket(socket_path)?;
 
@@ -37,8 +39,9 @@ pub async fn run_server(
                     Ok((stream, _addr)) => {
                         let child_token = cancel_token.child_token();
                         let conn_store = store.clone();
+                        let conn_ai = ai_backend.clone();
                         tokio::spawn(async move {
-                            if let Err(err) = handle_connection(stream, child_token, conn_store).await {
+                            if let Err(err) = handle_connection(stream, child_token, conn_store, conn_ai).await {
                                 tracing::error!("Connection handler error: {err}");
                             }
                         });

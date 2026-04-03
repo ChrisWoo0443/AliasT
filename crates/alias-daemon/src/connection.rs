@@ -6,6 +6,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio_util::sync::CancellationToken;
 
+use alias_core::ai::AiBackend;
 use alias_core::history::HistoryStore;
 use alias_protocol::{Request, Response};
 
@@ -18,6 +19,7 @@ pub async fn handle_connection(
     stream: UnixStream,
     cancel_token: CancellationToken,
     store: Arc<Mutex<HistoryStore>>,
+    ai_backend: Option<Arc<dyn AiBackend>>,
 ) -> Result<()> {
     let (reader, mut writer) = stream.into_split();
     let mut buf_reader = BufReader::new(reader);
@@ -47,7 +49,7 @@ pub async fn handle_connection(
                 }
 
                 let response = match serde_json::from_str::<Request>(trimmed) {
-                    Ok(request) => dispatch_request(request, &store),
+                    Ok(request) => dispatch_request(request, &store, &ai_backend).await,
                     Err(parse_error) => Response::Error {
                         id: "unknown".to_string(),
                         msg: parse_error.to_string(),
@@ -66,7 +68,11 @@ pub async fn handle_connection(
 }
 
 /// Dispatches a parsed request to the appropriate handler.
-fn dispatch_request(request: Request, store: &Arc<Mutex<HistoryStore>>) -> Response {
+async fn dispatch_request(
+    request: Request,
+    store: &Arc<Mutex<HistoryStore>>,
+    ai_backend: &Option<Arc<dyn AiBackend>>,
+) -> Response {
     match request {
         Request::Ping { id } => Response::Pong {
             id,
@@ -91,12 +97,21 @@ fn dispatch_request(request: Request, store: &Arc<Mutex<HistoryStore>>) -> Respo
             }
             Response::Ack { id }
         }
-        Request::Generate { id, prompt: _ } => {
-            // Placeholder: AI generation will be wired in Plan 03-02
-            Response::Error {
+        Request::Generate { id, prompt } => match ai_backend {
+            Some(backend) => match backend.generate(&prompt).await {
+                Ok(command_text) => Response::Command {
+                    id,
+                    text: command_text,
+                },
+                Err(err) => Response::Error {
+                    id,
+                    msg: err.to_string(),
+                },
+            },
+            None => Response::Error {
                 id,
-                msg: "generate not yet implemented".to_string(),
-            }
-        }
+                msg: "No AI model configured. Set ALIAS_NL_MODEL env var.".to_string(),
+            },
+        },
     }
 }

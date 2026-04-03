@@ -7,6 +7,7 @@ use tokio::signal::unix::{signal, SignalKind};
 use tokio_util::sync::CancellationToken;
 use tracing_subscriber::EnvFilter;
 
+use alias_core::ai::{AiBackend, ollama::OllamaBackend};
 use alias_core::history::{parse_history_file, HistoryStore};
 
 mod connection;
@@ -125,11 +126,24 @@ async fn main() -> Result<()> {
 
             let shared_store = Arc::new(Mutex::new(store));
 
+            // Initialize AI backend from ALIAS_NL_MODEL env var
+            let ai_backend: Option<Arc<dyn AiBackend>> = match std::env::var("ALIAS_NL_MODEL") {
+                Ok(model) if !model.is_empty() => {
+                    let backend = OllamaBackend::new(model.clone());
+                    tracing::info!(model = %model, "AI backend initialized: ollama");
+                    Some(Arc::new(backend))
+                }
+                _ => {
+                    tracing::info!("No ALIAS_NL_MODEL set -- NL mode disabled");
+                    None
+                }
+            };
+
             let cancel_token = CancellationToken::new();
             let server_token = cancel_token.clone();
 
             let server_handle = tokio::spawn(async move {
-                server::run_server(&socket_path, server_token, shared_store).await
+                server::run_server(&socket_path, server_token, shared_store, ai_backend).await
             });
 
             // Wait for shutdown signals

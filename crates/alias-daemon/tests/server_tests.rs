@@ -22,7 +22,7 @@ async fn start_test_server() -> (std::path::PathBuf, CancellationToken, tempfile
     let server_path = socket_path.clone();
     let server_token = cancel_token.clone();
     tokio::spawn(async move {
-        server::run_server(&server_path, server_token, shared_store)
+        server::run_server(&server_path, server_token, shared_store, None)
             .await
             .unwrap();
     });
