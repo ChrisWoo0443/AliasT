@@ -90,11 +90,11 @@ Plans:
   1. User can configure Claude API or OpenAI API keys and use cloud backends for natural language command generation
   2. Ghost-text rendering works correctly in iTerm2, Terminal.app, Kitty, Ghostty, and Alacritty
   3. Ghost-text styling (color, dimming) is configurable to accommodate different terminal color schemes
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 05-01: TBD
-- [ ] 05-02: TBD
+- [ ] 05-01-PLAN.md -- ClaudeBackend and OpenAiBackend implementing AiBackend trait, daemon backend selection via ALIAS_NL_BACKEND
+- [ ] 05-02-PLAN.md -- Style presets (dark/light/solarized) for ghost text, terminal compatibility verification
 
 ## Progress
 
@@ -107,4 +107,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 2. History-Based Suggestions | 0/3 | Planning complete | - |
 | 3. Natural Language Mode | 0/3 | Planning complete | - |
 | 4. Context & Ranking Intelligence | 0/2 | Planning complete | - |
-| 5. Cloud Backends & Terminal Compatibility | 0/0 | Not started | - |
+| 5. Cloud Backends & Terminal Compatibility | 0/2 | Planning complete | - |
