@@ -65,7 +65,7 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 03-01-PLAN.md -- Protocol types (Generate/Command), AiBackend trait, OllamaBackend with reqwest
+- [x] 03-01-PLAN.md -- Protocol types (Generate/Command), AiBackend trait, OllamaBackend with reqwest
 - [ ] 03-02-PLAN.md -- Daemon wiring: AI backend init, connection handler Generate dispatch, E2E tests
 - [ ] 03-03-PLAN.md -- Zsh plugin NL mode: Ctrl+Space toggle, spinner, accept/reject keybindings
 
