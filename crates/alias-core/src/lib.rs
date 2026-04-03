@@ -1,24 +1,26 @@
 pub mod history;
 
-/// Returns a hardcoded completion suggestion for the given command buffer.
+use history::HistoryStore;
+
+/// Returns a suffix-only completion suggestion for the given command buffer
+/// by looking up the most recent matching command in the history store.
 ///
-/// This is a Phase 1 placeholder that provides static suggestions for
-/// end-to-end testing of the ghost text pipeline. It will be replaced
-/// with history-based and AI-powered suggestions in later phases.
-pub fn suggest(buffer: &str) -> Option<String> {
+/// Returns None if the buffer is empty, no match exists, or the match is
+/// an exact duplicate of the current buffer (nothing to suggest).
+pub fn suggest(store: &HistoryStore, buffer: &str) -> Option<String> {
     if buffer.is_empty() {
         return None;
     }
 
-    if buffer.starts_with("git ch") {
-        Some("eckout main".to_string())
-    } else if buffer.starts_with("git co") {
-        Some("mmit -m \"\"".to_string())
-    } else if buffer == "ls" {
-        Some(" -la".to_string())
-    } else if buffer.starts_with("cd ") {
-        Some("..".to_string())
-    } else {
-        None
+    match store.suggest_prefix(buffer) {
+        Ok(Some(full_command)) => {
+            let suffix = &full_command[buffer.len()..];
+            if suffix.is_empty() {
+                None
+            } else {
+                Some(suffix.to_string())
+            }
+        }
+        _ => None,
     }
 }
