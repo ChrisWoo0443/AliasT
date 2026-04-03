@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 04-01-PLAN.md
-last_updated: "2026-04-03T18:42:39.286Z"
+stopped_at: "Completed 04-02-PLAN.md (checkpoint: human-verify pending)"
+last_updated: "2026-04-03T18:46:43.904Z"
 last_activity: 2026-04-03
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 11
-  completed_plans: 8
+  completed_plans: 9
   percent: 0
 ---
 
@@ -60,6 +60,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 03-01 P01 | 3min | 1 tasks | 9 files |
 | Phase 03 P02 | 3min | 2 tasks | 6 files |
 | Phase 04 P01 | 6min | 2 tasks | 11 files |
+| Phase 04 P02 | 3min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,8 @@ Recent decisions affecting current work:
 - [Phase 04]: Frecency SQL scoring with recency/frequency/directory/exit-code buckets for context-aware ranking
 - [Phase 04]: Keep AiBackend trait unchanged; enrich prompt at call site with [Context] block prefix
 - [Phase 04]: PRAGMA user_version for schema migration; suggest_ranked falls back to suggest_prefix
+- [Phase 04]: Reorder precmd hooks so _alias_precmd_record runs before _alias_nl_precmd to guarantee exit code capture
+- [Phase 04]: Cache git branch per prompt in precmd, not per keystroke, to avoid subprocess overhead
 
 ### Pending Todos
 
@@ -96,6 +99,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-03T18:42:39.284Z
-Stopped at: Completed 04-01-PLAN.md
+Last session: 2026-04-03T18:46:43.902Z
+Stopped at: Completed 04-02-PLAN.md (checkpoint: human-verify pending)
 Resume file: None

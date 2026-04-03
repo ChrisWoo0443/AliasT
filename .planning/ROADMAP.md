@@ -80,7 +80,7 @@ Plans:
 
 Plans:
 - [x] 04-01-PLAN.md -- Protocol extension, schema migration, frecency SQL query, suggest() context-aware, daemon dispatch, AI prompt enrichment
-- [ ] 04-02-PLAN.md -- Zsh plugin exit code capture, context gathering for Complete/Record/Generate, git branch caching
+- [x] 04-02-PLAN.md -- Zsh plugin exit code capture, context gathering for Complete/Record/Generate, git branch caching
 
 ### Phase 5: Cloud Backends & Terminal Compatibility
 **Goal**: Users can opt into cloud AI providers for higher-quality generation, and the plugin works reliably across major macOS terminals
