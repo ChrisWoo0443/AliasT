@@ -21,6 +21,8 @@ typeset -g _ALIAS_LAST_HISTNUM=0
 typeset -g _ALIAS_SOCKET_PATH="${XDG_RUNTIME_DIR:-/tmp/alias-$UID}/alias/alias.sock"
 typeset -g _ALIAS_NL_STATE="inactive"   # inactive | input | generating | review
 typeset -g _ALIAS_NL_PROMPT=""           # Saved prompt for regeneration
+typeset -g _ALIAS_LAST_EXIT=""
+typeset -g _ALIAS_GIT_BRANCH=""
 
 # ── 3. Connection management (lazy -- no I/O at plugin load time) ───
 _alias_connect() {
@@ -78,7 +80,23 @@ _alias_request_suggestion() {
   local escaped_buffer="${BUFFER//\\/\\\\}"
   escaped_buffer="${escaped_buffer//\"/\\\"}"
 
-  local msg="{\"id\":\"r${_ALIAS_REQ_ID}\",\"type\":\"complete\",\"buf\":\"${escaped_buffer}\",\"cur\":${CURSOR}}"
+  local escaped_cwd="${PWD//\\/\\\\}"
+  escaped_cwd="${escaped_cwd//\"/\\\"}"
+
+  # Git branch: use cached value from precmd (per D-05)
+  local branch_field=""
+  if [[ -n "$_ALIAS_GIT_BRANCH" ]]; then
+    local escaped_branch="${_ALIAS_GIT_BRANCH//\\/\\\\}"
+    escaped_branch="${escaped_branch//\"/\\\"}"
+    branch_field=",\"git_branch\":\"${escaped_branch}\""
+  fi
+
+  local exit_field=""
+  if [[ -n "$_ALIAS_LAST_EXIT" ]]; then
+    exit_field=",\"exit_code\":${_ALIAS_LAST_EXIT}"
+  fi
+
+  local msg="{\"id\":\"r${_ALIAS_REQ_ID}\",\"type\":\"complete\",\"buf\":\"${escaped_buffer}\",\"cur\":${CURSOR},\"cwd\":\"${escaped_cwd}\"${exit_field}${branch_field}}"
 
   print -u $_ALIAS_FD "$msg" 2>/dev/null || {
     _alias_reconnect
@@ -224,7 +242,21 @@ _alias_nl_generate() {
     local escaped="${prompt//\\/\\\\}"
     escaped="${escaped//\"/\\\"}"
     escaped="${escaped//$'\n'/ }"
-    local msg="{\"id\":\"r${_ALIAS_REQ_ID}\",\"type\":\"generate\",\"prompt\":\"${escaped}\"}"
+
+    local escaped_cwd="${PWD//\\/\\\\}"
+    escaped_cwd="${escaped_cwd//\"/\\\"}"
+    local branch_field=""
+    if [[ -n "$_ALIAS_GIT_BRANCH" ]]; then
+      local escaped_branch="${_ALIAS_GIT_BRANCH//\\/\\\\}"
+      escaped_branch="${escaped_branch//\"/\\\"}"
+      branch_field=",\"git_branch\":\"${escaped_branch}\""
+    fi
+    local exit_field=""
+    if [[ -n "$_ALIAS_LAST_EXIT" ]]; then
+      exit_field=",\"exit_code\":${_ALIAS_LAST_EXIT}"
+    fi
+
+    local msg="{\"id\":\"r${_ALIAS_REQ_ID}\",\"type\":\"generate\",\"prompt\":\"${escaped}\",\"cwd\":\"${escaped_cwd}\"${exit_field}${branch_field}}"
     print -u $bg_fd "$msg" 2>/dev/null || { echo "error:send" > "$tmpfile"; exec {bg_fd}>&-; exit 1; }
 
     local line=""
@@ -349,27 +381,17 @@ _alias_nl_escape() {
 zle -N _alias_nl_escape
 bindkey '\e' _alias_nl_escape
 
-# ── 10. NL mode persistence (re-enter after command execution) ─────
-_alias_nl_precmd() {
-  # If we just executed a command from NL review state, re-enter NL input
-  if [[ "$_ALIAS_NL_STATE" == "review" ]]; then
-    _ALIAS_NL_STATE="input"
-    _ALIAS_NL_PROMPT=""
-    # PREDISPLAY will be set when ZLE starts for the next prompt
-  fi
-}
-add-zsh-hook precmd _alias_nl_precmd
-
-# Re-apply [NL] prefix when ZLE starts a new line (after precmd)
-_alias_nl_line_init() {
-  if [[ "$_ALIAS_NL_STATE" == "input" ]]; then
-    PREDISPLAY="[NL] "
-  fi
-}
-add-zle-hook-widget zle-line-init _alias_nl_line_init
-
-# ── 11. Command recording (precmd hook) ────────────────────────────
+# ── 10. Command recording (precmd hook -- registered FIRST) ────────
 _alias_precmd_record() {
+  # CRITICAL: Capture exit code FIRST -- $? is overwritten by every command
+  local last_exit_code=$?
+  # Store for use by _alias_request_suggestion and _alias_nl_generate
+  typeset -g _ALIAS_LAST_EXIT=$last_exit_code
+
+  # Cache git branch per prompt (not per keystroke) per D-05 and Pitfall 4
+  typeset -g _ALIAS_GIT_BRANCH=""
+  _ALIAS_GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
+
   # Get the most recent history entry number and command via fc
   local fc_out
   fc_out="$(fc -ln -1 2>/dev/null)" || return
@@ -390,7 +412,7 @@ _alias_precmd_record() {
   escaped_cwd="${escaped_cwd//\"/\\\"}"
 
   (( _ALIAS_REQ_ID++ ))
-  local msg="{\"id\":\"r${_ALIAS_REQ_ID}\",\"type\":\"record\",\"cmd\":\"${escaped_cmd}\",\"cwd\":\"${escaped_cwd}\"}"
+  local msg="{\"id\":\"r${_ALIAS_REQ_ID}\",\"type\":\"record\",\"cmd\":\"${escaped_cmd}\",\"cwd\":\"${escaped_cwd}\",\"exit_code\":${last_exit_code}}"
 
   # Send and read the Ack response to keep the socket buffer clean
   # (stale Ack would confuse the next suggestion read)
@@ -401,6 +423,25 @@ _alias_precmd_record() {
 
 autoload -Uz add-zsh-hook
 add-zsh-hook precmd _alias_precmd_record
+
+# ── 11. NL mode persistence (re-enter after command execution) ─────
+_alias_nl_precmd() {
+  # If we just executed a command from NL review state, re-enter NL input
+  if [[ "$_ALIAS_NL_STATE" == "review" ]]; then
+    _ALIAS_NL_STATE="input"
+    _ALIAS_NL_PROMPT=""
+    # PREDISPLAY will be set when ZLE starts for the next prompt
+  fi
+}
+add-zsh-hook precmd _alias_nl_precmd
+
+# Re-apply [NL] prefix when ZLE starts a new line (after precmd)
+_alias_nl_line_init() {
+  if [[ "$_ALIAS_NL_STATE" == "input" ]]; then
+    PREDISPLAY="[NL] "
+  fi
+}
+add-zle-hook-widget zle-line-init _alias_nl_line_init
 
 # ── 12. Compatibility detection ─────────────────────────────────────
 if (( ${+_ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE} )) || [[ -n "${functions[_zsh_autosuggest_suggest]}" ]]; then
