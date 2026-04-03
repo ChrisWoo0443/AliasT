@@ -17,6 +17,7 @@ typeset -g _ALIAS_FD=""
 typeset -g _ALIAS_REQ_ID=0
 typeset -g _ALIAS_HIGHLIGHT_ENTRY=""
 typeset -g _ALIAS_LAST_BUFFER=""
+typeset -g _ALIAS_LAST_HISTNUM=0
 typeset -g _ALIAS_SOCKET_PATH="${XDG_RUNTIME_DIR:-/tmp/alias-$UID}/alias/alias.sock"
 
 # ── 3. Connection management (lazy -- no I/O at plugin load time) ───
@@ -114,7 +115,45 @@ _alias_accept_line_wrapper() {
 }
 zle -N accept-line _alias_accept_line_wrapper
 
-# ── 7. Hook registration (non-conflicting) ──────────────────────────
+# ── 7. Accept keybindings ───────────────────────────────────────────
+_alias_accept_suggestion() {
+  if [[ -n "$POSTDISPLAY" ]]; then
+    BUFFER="${BUFFER}${POSTDISPLAY}"
+    CURSOR=$#BUFFER
+    _alias_clear_ghost
+  else
+    zle expand-or-complete
+  fi
+}
+zle -N _alias_accept_suggestion
+bindkey '^I' _alias_accept_suggestion
+
+_alias_accept_word() {
+  if [[ -n "$POSTDISPLAY" ]]; then
+    local remaining="$POSTDISPLAY"
+    local word=""
+    # Grab leading whitespace
+    if [[ "$remaining" =~ '^[[:space:]]*' ]]; then
+      word="${MATCH}"
+      remaining="${remaining#$MATCH}"
+    fi
+    # Grab next non-space word
+    if [[ "$remaining" =~ '^[^[:space:]]+' ]]; then
+      word="${word}${MATCH}"
+    fi
+    BUFFER="${BUFFER}${word}"
+    CURSOR=$#BUFFER
+    _alias_clear_ghost
+    # Re-request suggestion for updated buffer
+    _alias_request_suggestion
+  else
+    zle .complete-word
+  fi
+}
+zle -N _alias_accept_word
+bindkey '^[[Z' _alias_accept_word
+
+# ── 8. Hook registration (non-conflicting) ──────────────────────────
 _alias_line_pre_redraw() {
   if [[ "$BUFFER" != "$_ALIAS_LAST_BUFFER" ]]; then
     _ALIAS_LAST_BUFFER="$BUFFER"
@@ -125,7 +164,40 @@ _alias_line_pre_redraw() {
 }
 add-zle-hook-widget zle-line-pre-redraw _alias_line_pre_redraw
 
-# ── 8. Compatibility detection ──────────────────────────────────────
+# ── 9. Command recording (precmd hook) ─────────────────────────────
+_alias_precmd_record() {
+  # Get the last history entry number and command
+  local hist_line
+  hist_line="$(fc -l -1 2>/dev/null)" || return
+  local histnum="${hist_line%%[[:space:]]*}"
+
+  # Skip if we already recorded this history event
+  [[ "$histnum" == "$_ALIAS_LAST_HISTNUM" ]] && return
+  _ALIAS_LAST_HISTNUM="$histnum"
+
+  # Extract command text (strip leading number + spaces from fc output)
+  local cmd="${hist_line#*[0-9]  }"
+  [[ -z "$cmd" ]] && return
+
+  _alias_connect || return
+
+  # Escape for JSON
+  local escaped_cmd="${cmd//\\/\\\\}"
+  escaped_cmd="${escaped_cmd//\"/\\\"}"
+  local escaped_cwd="${PWD//\\/\\\\}"
+  escaped_cwd="${escaped_cwd//\"/\\\"}"
+
+  (( _ALIAS_REQ_ID++ ))
+  local msg="{\"id\":\"r${_ALIAS_REQ_ID}\",\"type\":\"record\",\"cmd\":\"${escaped_cmd}\",\"cwd\":\"${escaped_cwd}\"}"
+
+  # Fire-and-forget: send but don't wait for response
+  print -u $_ALIAS_FD "$msg" 2>/dev/null || _alias_reconnect
+}
+
+autoload -Uz add-zsh-hook
+add-zsh-hook precmd _alias_precmd_record
+
+# ── 10. Compatibility detection ─────────────────────────────────────
 if (( ${+_ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE} )) || [[ -n "${functions[_zsh_autosuggest_suggest]}" ]]; then
   print "alias: zsh-autosuggestions detected. Ghost text may conflict." >&2
 fi
