@@ -47,6 +47,25 @@ _alias_reconnect() {
 }
 
 # ── 4. Ghost text rendering ─────────────────────────────────────────
+
+# Resolve style preset to a highlight spec.
+# Priority: ALIAS_SUGGESTION_HIGHLIGHT (custom) > ALIAS_SUGGESTION_STYLE (preset) > default (dark)
+_alias_resolve_style() {
+  # Custom override always wins
+  if [[ -n "$ALIAS_SUGGESTION_HIGHLIGHT" ]]; then
+    echo "$ALIAS_SUGGESTION_HIGHLIGHT"
+    return
+  fi
+
+  # Named presets using hex colors (terminal-palette-independent)
+  case "${ALIAS_SUGGESTION_STYLE:-dark}" in
+    dark)       echo "fg=#666666" ;;
+    light)      echo "fg=#999999" ;;
+    solarized)  echo "fg=#586e75" ;;
+    *)          echo "fg=#666666" ;;
+  esac
+}
+
 _alias_show_ghost() {
   local suggestion_text="$1"
 
@@ -57,7 +76,7 @@ _alias_show_ghost() {
   if (( $#POSTDISPLAY > 0 )); then
     local start=$#BUFFER
     local end=$(( start + $#POSTDISPLAY ))
-    local style="${ALIAS_SUGGESTION_HIGHLIGHT:-fg=8}"
+    local style="$(_alias_resolve_style)"
     _ALIAS_HIGHLIGHT_ENTRY="${start} ${end} ${style} memo=alias"
     region_highlight+=("$_ALIAS_HIGHLIGHT_ENTRY")
   fi
