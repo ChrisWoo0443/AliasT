@@ -1,20 +1,30 @@
+use std::sync::{Arc, Mutex};
+
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio::time::{timeout, Duration};
 use tokio_util::sync::CancellationToken;
 
+use alias_core::history::HistoryStore;
 use alias_daemon::server;
 
-/// Helper: start a server on a temp socket, returning the path and cancel token.
+/// Helper: start a server on a temp socket with a fresh HistoryStore,
+/// returning the path and cancel token.
 async fn start_test_server() -> (std::path::PathBuf, CancellationToken, tempfile::TempDir) {
     let temp_dir = tempfile::tempdir().unwrap();
     let socket_path = temp_dir.path().join("test.sock");
+    let db_path = temp_dir.path().join("history.db");
     let cancel_token = CancellationToken::new();
+
+    let store = HistoryStore::open(&db_path).unwrap();
+    let shared_store = Arc::new(Mutex::new(store));
 
     let server_path = socket_path.clone();
     let server_token = cancel_token.clone();
     tokio::spawn(async move {
-        server::run_server(&server_path, server_token).await.unwrap();
+        server::run_server(&server_path, server_token, shared_store)
+            .await
+            .unwrap();
     });
 
     // Wait briefly for the server to start listening
@@ -79,6 +89,14 @@ async fn server_responds_to_complete_with_suggestion() {
 
     let result = timeout(Duration::from_secs(5), async {
         let mut stream = UnixStream::connect(&socket_path).await.unwrap();
+
+        // Record a command first so the store has data for prefix match
+        let _record_response = send_and_receive(
+            &mut stream,
+            r#"{"type":"record","id":"r0","cmd":"git checkout main","cwd":"/home"}"#,
+        )
+        .await;
+
         let response = send_and_receive(
             &mut stream,
             r#"{"type":"complete","id":"c1","buf":"git ch","cur":6}"#,
@@ -127,6 +145,13 @@ async fn server_handles_multiple_sequential_requests() {
         let parsed1: serde_json::Value = serde_json::from_str(&response1).unwrap();
         assert_eq!(parsed1["type"], "pong");
         assert_eq!(parsed1["id"], "m1");
+
+        // Record a command so complete has data
+        let _record_response = send_and_receive(
+            &mut stream,
+            r#"{"type":"record","id":"r0","cmd":"ls -la","cwd":"/tmp"}"#,
+        )
+        .await;
 
         // Second request: complete
         let response2 = send_and_receive(

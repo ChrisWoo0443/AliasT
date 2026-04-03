@@ -1,27 +1,38 @@
 //! End-to-end integration tests proving the full NDJSON request/response loop.
 //!
-//! These tests start a real daemon server on a temp socket, connect a client,
-//! send NDJSON requests, and validate the responses -- proving the complete
-//! communication loop works over Unix domain sockets.
+//! These tests start a real daemon server on a temp socket with a SQLite-backed
+//! HistoryStore, connect a client, send NDJSON requests, and validate the
+//! responses -- proving the complete communication loop works over Unix domain
+//! sockets with real history data.
+
+use std::sync::{Arc, Mutex};
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio::time::{timeout, Duration};
 use tokio_util::sync::CancellationToken;
 
+use alias_core::history::HistoryStore;
 use alias_daemon::server;
 use alias_protocol::Response;
 
-/// Start daemon on a temp socket, returning path, cancel token, and temp dir guard.
+/// Start daemon on a temp socket with a fresh HistoryStore, returning path,
+/// cancel token, and temp dir guard.
 async fn spawn_daemon() -> (std::path::PathBuf, CancellationToken, tempfile::TempDir) {
     let temp_dir = tempfile::tempdir().unwrap();
     let socket_path = temp_dir.path().join("alias.sock");
+    let db_path = temp_dir.path().join("history.db");
     let cancel_token = CancellationToken::new();
+
+    let store = HistoryStore::open(&db_path).unwrap();
+    let shared_store = Arc::new(Mutex::new(store));
 
     let server_path = socket_path.clone();
     let server_token = cancel_token.clone();
     tokio::spawn(async move {
-        server::run_server(&server_path, server_token).await.unwrap();
+        server::run_server(&server_path, server_token, shared_store)
+            .await
+            .unwrap();
     });
 
     // Wait for server to bind the socket
@@ -52,6 +63,21 @@ async fn test_complete_request_returns_suggestion() {
 
     let result = timeout(Duration::from_secs(5), async {
         let mut stream = UnixStream::connect(&socket_path).await.unwrap();
+
+        // Record a command first so the store has data
+        let record_response = send_ndjson(
+            &mut stream,
+            r#"{"id":"rec1","type":"record","cmd":"git checkout main","cwd":"/home"}"#,
+        )
+        .await;
+        assert_eq!(
+            record_response,
+            Response::Ack {
+                id: "rec1".to_string()
+            }
+        );
+
+        // Now query for a prefix match
         let response = send_ndjson(
             &mut stream,
             r#"{"id":"r1","type":"complete","buf":"git ch","cur":6}"#,
@@ -62,6 +88,57 @@ async fn test_complete_request_returns_suggestion() {
             Response::Suggestion { id, text } => {
                 assert_eq!(id, "r1");
                 assert_eq!(text, "eckout main");
+            }
+            other => panic!("expected Suggestion, got {:?}", other),
+        }
+    })
+    .await;
+
+    cancel_token.cancel();
+    assert!(result.is_ok(), "test timed out");
+}
+
+#[tokio::test]
+async fn test_record_returns_ack() {
+    let (socket_path, cancel_token, _temp_dir) = spawn_daemon().await;
+
+    let result = timeout(Duration::from_secs(5), async {
+        let mut stream = UnixStream::connect(&socket_path).await.unwrap();
+        let response = send_ndjson(
+            &mut stream,
+            r#"{"id":"r1","type":"record","cmd":"ls -la","cwd":"/tmp"}"#,
+        )
+        .await;
+
+        match response {
+            Response::Ack { id } => {
+                assert_eq!(id, "r1");
+            }
+            other => panic!("expected Ack, got {:?}", other),
+        }
+    })
+    .await;
+
+    cancel_token.cancel();
+    assert!(result.is_ok(), "test timed out");
+}
+
+#[tokio::test]
+async fn test_complete_empty_db_returns_empty() {
+    let (socket_path, cancel_token, _temp_dir) = spawn_daemon().await;
+
+    let result = timeout(Duration::from_secs(5), async {
+        let mut stream = UnixStream::connect(&socket_path).await.unwrap();
+        let response = send_ndjson(
+            &mut stream,
+            r#"{"id":"r1","type":"complete","buf":"git ch","cur":6}"#,
+        )
+        .await;
+
+        match response {
+            Response::Suggestion { id, text } => {
+                assert_eq!(id, "r1");
+                assert_eq!(text, "", "empty DB should return empty suggestion");
             }
             other => panic!("expected Suggestion, got {:?}", other),
         }
@@ -103,40 +180,38 @@ async fn test_multiple_clients() {
     let (socket_path, cancel_token, _temp_dir) = spawn_daemon().await;
 
     let result = timeout(Duration::from_secs(5), async {
-        // Client 1: send complete request
+        // Client 1: record a command
         {
             let mut stream = UnixStream::connect(&socket_path).await.unwrap();
             let response = send_ndjson(
                 &mut stream,
-                r#"{"id":"r1","type":"complete","buf":"git ch","cur":6}"#,
+                r#"{"id":"rec1","type":"record","cmd":"docker compose up","cwd":"/project"}"#,
+            )
+            .await;
+            assert_eq!(
+                response,
+                Response::Ack {
+                    id: "rec1".to_string()
+                }
+            );
+        }
+        // Client 1 stream is dropped (disconnected)
+
+        // Client 2: query for a prefix match
+        {
+            let mut stream = UnixStream::connect(&socket_path).await.unwrap();
+            let response = send_ndjson(
+                &mut stream,
+                r#"{"id":"r2","type":"complete","buf":"docker ","cur":7}"#,
             )
             .await;
 
             match response {
                 Response::Suggestion { id, text } => {
-                    assert_eq!(id, "r1");
-                    assert_eq!(text, "eckout main");
-                }
-                other => panic!("client 1: expected Suggestion, got {:?}", other),
-            }
-        }
-        // Client 1 stream is dropped (disconnected)
-
-        // Client 2: send ping request
-        {
-            let mut stream = UnixStream::connect(&socket_path).await.unwrap();
-            let response = send_ndjson(
-                &mut stream,
-                r#"{"id":"r2","type":"ping"}"#,
-            )
-            .await;
-
-            match response {
-                Response::Pong { id, v } => {
                     assert_eq!(id, "r2");
-                    assert_eq!(v, "0.1.0");
+                    assert_eq!(text, "compose up");
                 }
-                other => panic!("client 2: expected Pong, got {:?}", other),
+                other => panic!("client 2: expected Suggestion, got {:?}", other),
             }
         }
     })
