@@ -1,4 +1,5 @@
 use alias_core::ai::ollama::OllamaBackend;
+use alias_core::ai::ollama::SYSTEM_PROMPT;
 use alias_core::ai::{AiBackend, AiError};
 
 /// Verify the AiBackend trait is object-safe by creating a Box<dyn AiBackend>.
@@ -56,4 +57,38 @@ async fn ollama_generate_returns_error_for_unreachable_server() {
         AiError::Unavailable(_) => {}
         other => panic!("Expected AiError::Unavailable, got: {:?}", other),
     }
+}
+
+// --- System prompt context tests ---
+
+#[test]
+fn system_prompt_mentions_context_block() {
+    assert!(
+        SYSTEM_PROMPT.contains("Context"),
+        "System prompt should mention [Context] blocks"
+    );
+}
+
+#[test]
+fn system_prompt_mentions_current_directory() {
+    assert!(
+        SYSTEM_PROMPT.contains("current directory"),
+        "System prompt should mention current directory context"
+    );
+}
+
+#[test]
+fn system_prompt_mentions_git_branch() {
+    assert!(
+        SYSTEM_PROMPT.contains("git branch"),
+        "System prompt should mention git branch context"
+    );
+}
+
+#[test]
+fn system_prompt_mentions_exit_code() {
+    assert!(
+        SYSTEM_PROMPT.contains("exit code"),
+        "System prompt should mention exit code context"
+    );
 }

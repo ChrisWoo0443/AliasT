@@ -5,13 +5,15 @@ use std::time::Duration;
 use super::{AiBackend, AiError};
 
 /// System prompt that instructs the model to output only a shell command.
-const SYSTEM_PROMPT: &str = "\
+pub const SYSTEM_PROMPT: &str = "\
 You are a shell command generator for macOS zsh. \
 The user will describe what they want to do in plain English. \
 Output ONLY the shell command. No explanation, no markdown, no backticks, no commentary. \
 If the request is ambiguous, output the most likely intended command. \
 If the request cannot be translated to a shell command, output: echo 'Could not generate command' \
-Always prefer standard macOS/BSD tools. Use common flags.";
+Always prefer standard macOS/BSD tools. Use common flags. \
+The user's message may start with a [Context] block containing their current directory, \
+git branch, and last exit code. Use this context to generate more relevant commands.";
 
 /// Request body for the Ollama /api/chat endpoint.
 #[derive(serde::Serialize)]
