@@ -37,11 +37,11 @@ For each terminal:
 1. Open the terminal
 2. Source the plugin:
    ```bash
-   source plugin/alias.plugin.zsh
+   source plugin/aliast.plugin.zsh
    ```
 3. Ensure daemon is running:
    ```bash
-   cargo run -p alias-daemon -- start &
+   cargo run -p aliast-daemon -- start &
    ```
 4. Type a partial command that has history matches
 5. Verify ghost text appears in dimmed gray after the cursor
@@ -50,16 +50,16 @@ For each terminal:
 
 ```bash
 # Dark preset (default) -- medium gray on dark backgrounds
-ALIAS_SUGGESTION_STYLE=dark source plugin/alias.plugin.zsh
+ALIAST_SUGGESTION_STYLE=dark source plugin/aliast.plugin.zsh
 
 # Light preset -- darker gray on light backgrounds
-ALIAS_SUGGESTION_STYLE=light source plugin/alias.plugin.zsh
+ALIAST_SUGGESTION_STYLE=light source plugin/aliast.plugin.zsh
 
 # Solarized preset -- Solarized base01, visible on both dark and light
-ALIAS_SUGGESTION_STYLE=solarized source plugin/alias.plugin.zsh
+ALIAST_SUGGESTION_STYLE=solarized source plugin/aliast.plugin.zsh
 
-# Custom override -- verifies ALIAS_SUGGESTION_HIGHLIGHT takes priority
-ALIAS_SUGGESTION_HIGHLIGHT="fg=red" source plugin/alias.plugin.zsh
+# Custom override -- verifies ALIAST_SUGGESTION_HIGHLIGHT takes priority
+ALIAST_SUGGESTION_HIGHLIGHT="fg=red" source plugin/aliast.plugin.zsh
 ```
 
 ### What to Look For
