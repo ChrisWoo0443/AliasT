@@ -121,8 +121,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [x] 06-01-PLAN.md -- Rename Rust crates (protocol, core, daemon), update all imports/env vars/paths, add data migration
-- [ ] 06-02-PLAN.md -- Rename zsh plugin file, replace all identifiers, update docs, rename GitHub repo
+- [ ] 06-01-PLAN.md -- Rename Rust crates (protocol, core, daemon), update all imports/env vars/paths, add data migration
+- [x] 06-02-PLAN.md -- Rename zsh plugin file, replace all identifiers, update docs, rename GitHub repo
 
 ### Phase 7: CI/CD Release Pipeline
 **Goal**: Pushing a version tag produces a GitHub Release with downloadable macOS binaries for both architectures
