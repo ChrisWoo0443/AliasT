@@ -1,4 +1,4 @@
-use alias_daemon::connection::enrich_prompt;
+use aliast_daemon::connection::enrich_prompt;
 
 #[test]
 fn enrich_prompt_with_cwd_only() {

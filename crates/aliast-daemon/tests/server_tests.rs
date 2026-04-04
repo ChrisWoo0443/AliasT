@@ -5,8 +5,8 @@ use tokio::net::UnixStream;
 use tokio::time::{timeout, Duration};
 use tokio_util::sync::CancellationToken;
 
-use alias_core::history::HistoryStore;
-use alias_daemon::server;
+use aliast_core::history::HistoryStore;
+use aliast_daemon::server;
 
 /// Helper: start a server on a temp socket with a fresh HistoryStore,
 /// returning the path and cancel token.

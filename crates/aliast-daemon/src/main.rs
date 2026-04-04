@@ -7,18 +7,18 @@ use tokio::signal::unix::{signal, SignalKind};
 use tokio_util::sync::CancellationToken;
 use tracing_subscriber::EnvFilter;
 
-use alias_core::ai::claude::ClaudeBackend;
-use alias_core::ai::openai::OpenAiBackend;
-use alias_core::ai::{AiBackend, ollama::OllamaBackend};
-use alias_core::history::{parse_history_file, HistoryStore};
+use aliast_core::ai::claude::ClaudeBackend;
+use aliast_core::ai::openai::OpenAiBackend;
+use aliast_core::ai::{AiBackend, ollama::OllamaBackend};
+use aliast_core::history::{parse_history_file, HistoryStore};
 
 mod connection;
 mod lifecycle;
 mod server;
 
-/// Alias suggestion daemon -- serves ghost-text completions over a Unix socket.
+/// AliasT suggestion daemon -- serves ghost-text completions over a Unix socket.
 #[derive(Parser)]
-#[command(name = "alias-daemon", version, about = "Alias suggestion daemon")]
+#[command(name = "aliast-daemon", version, about = "AliasT suggestion daemon")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -41,14 +41,14 @@ enum Commands {
 
 /// Initializes tracing with file-based logging.
 ///
-/// Logs to `~/.local/share/alias/daemon.log`.
-/// Log level is controlled by `ALIAS_LOG_LEVEL` env var, defaulting to `warn`.
+/// Logs to `~/.local/share/aliast/daemon.log`.
+/// Log level is controlled by `ALIAST_LOG_LEVEL` env var, defaulting to `warn`.
 fn init_tracing() -> Result<()> {
     let log_dir = directories::BaseDirs::new()
-        .map(|dirs| dirs.data_local_dir().join("alias"))
+        .map(|dirs| dirs.data_local_dir().join("aliast"))
         .unwrap_or_else(|| {
             let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-            PathBuf::from(home).join(".local").join("share").join("alias")
+            PathBuf::from(home).join(".local").join("share").join("aliast")
         });
 
     std::fs::create_dir_all(&log_dir)?;
@@ -58,7 +58,7 @@ fn init_tracing() -> Result<()> {
         .append(true)
         .open(log_path)?;
 
-    let filter = EnvFilter::try_from_env("ALIAS_LOG_LEVEL")
+    let filter = EnvFilter::try_from_env("ALIAST_LOG_LEVEL")
         .unwrap_or_else(|_| EnvFilter::new("warn"));
 
     tracing_subscriber::fmt()
@@ -81,12 +81,12 @@ async fn main() -> Result<()> {
             let socket_path = socket.unwrap_or_else(lifecycle::default_socket_path);
             tracing::info!(?socket_path, "starting daemon");
 
-            // Initialize HistoryStore at ~/.local/share/alias/history.db
+            // Initialize HistoryStore at ~/.local/share/aliast/history.db
             let data_dir = directories::BaseDirs::new()
-                .map(|dirs| dirs.data_local_dir().join("alias"))
+                .map(|dirs| dirs.data_local_dir().join("aliast"))
                 .unwrap_or_else(|| {
                     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-                    PathBuf::from(home).join(".local").join("share").join("alias")
+                    PathBuf::from(home).join(".local").join("share").join("aliast")
                 });
             std::fs::create_dir_all(&data_dir)?;
             let db_path = data_dir.join("history.db");
@@ -128,31 +128,31 @@ async fn main() -> Result<()> {
 
             let shared_store = Arc::new(Mutex::new(store));
 
-            // Initialize AI backend from ALIAS_NL_BACKEND + ALIAS_NL_MODEL env vars
+            // Initialize AI backend from ALIAST_NL_BACKEND + ALIAST_NL_MODEL env vars
             let ai_backend: Option<Arc<dyn AiBackend>> = {
-                let model = std::env::var("ALIAS_NL_MODEL").ok().filter(|m| !m.is_empty());
-                let backend_name = std::env::var("ALIAS_NL_BACKEND")
+                let model = std::env::var("ALIAST_NL_MODEL").ok().filter(|m| !m.is_empty());
+                let backend_name = std::env::var("ALIAST_NL_BACKEND")
                     .unwrap_or_else(|_| "ollama".to_string());
 
                 match model {
                     Some(model) => match backend_name.as_str() {
-                        "claude" => match std::env::var("ALIAS_ANTHROPIC_KEY") {
+                        "claude" => match std::env::var("ALIAST_ANTHROPIC_KEY") {
                             Ok(key) if !key.is_empty() => {
                                 tracing::info!(model = %model, "AI backend initialized: claude");
                                 Some(Arc::new(ClaudeBackend::new(key, model)))
                             }
                             _ => {
-                                tracing::warn!("ALIAS_NL_BACKEND=claude but ALIAS_ANTHROPIC_KEY not set -- NL mode disabled");
+                                tracing::warn!("ALIAST_NL_BACKEND=claude but ALIAST_ANTHROPIC_KEY not set -- NL mode disabled");
                                 None
                             }
                         },
-                        "openai" => match std::env::var("ALIAS_OPENAI_KEY") {
+                        "openai" => match std::env::var("ALIAST_OPENAI_KEY") {
                             Ok(key) if !key.is_empty() => {
                                 tracing::info!(model = %model, "AI backend initialized: openai");
                                 Some(Arc::new(OpenAiBackend::new(key, model)))
                             }
                             _ => {
-                                tracing::warn!("ALIAS_NL_BACKEND=openai but ALIAS_OPENAI_KEY not set -- NL mode disabled");
+                                tracing::warn!("ALIAST_NL_BACKEND=openai but ALIAST_OPENAI_KEY not set -- NL mode disabled");
                                 None
                             }
                         },
@@ -162,7 +162,7 @@ async fn main() -> Result<()> {
                         }
                     },
                     None => {
-                        tracing::info!("No ALIAS_NL_MODEL set -- NL mode disabled");
+                        tracing::info!("No ALIAST_NL_MODEL set -- NL mode disabled");
                         None
                     }
                 }
@@ -196,16 +196,16 @@ async fn main() -> Result<()> {
             tracing::info!("Daemon stopped cleanly");
         }
         Commands::Stop => {
-            eprintln!("alias-daemon stop: not yet implemented");
+            eprintln!("aliast-daemon stop: not yet implemented");
         }
         Commands::Status => {
             let socket_path = lifecycle::default_socket_path();
             match std::os::unix::net::UnixStream::connect(&socket_path) {
                 Ok(_) => {
-                    println!("alias-daemon is running (socket: {})", socket_path.display());
+                    println!("aliast-daemon is running (socket: {})", socket_path.display());
                 }
                 Err(_) => {
-                    println!("alias-daemon is not running");
+                    println!("aliast-daemon is not running");
                 }
             }
         }

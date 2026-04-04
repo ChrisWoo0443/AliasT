@@ -13,10 +13,10 @@ use tokio::net::UnixStream;
 use tokio::time::{timeout, Duration};
 use tokio_util::sync::CancellationToken;
 
-use alias_core::ai::{AiBackend, AiError};
-use alias_core::history::HistoryStore;
-use alias_daemon::server;
-use alias_protocol::Response;
+use aliast_core::ai::{AiBackend, AiError};
+use aliast_core::history::HistoryStore;
+use aliast_daemon::server;
+use aliast_protocol::Response;
 
 /// Mock AI backend that captures the prompt and returns a fixed response.
 struct MockAiBackend {

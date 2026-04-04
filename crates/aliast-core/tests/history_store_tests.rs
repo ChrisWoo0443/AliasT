@@ -1,4 +1,4 @@
-use alias_core::history::{HistoryEntry, HistoryStore, SuggestionContext};
+use aliast_core::history::{HistoryEntry, HistoryStore, SuggestionContext};
 
 #[test]
 fn open_creates_db_with_table_and_index() {

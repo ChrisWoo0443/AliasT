@@ -1,8 +1,8 @@
-use alias_core::ai::claude::ClaudeBackend;
-use alias_core::ai::ollama::OllamaBackend;
-use alias_core::ai::ollama::SYSTEM_PROMPT;
-use alias_core::ai::openai::OpenAiBackend;
-use alias_core::ai::{AiBackend, AiError};
+use aliast_core::ai::claude::ClaudeBackend;
+use aliast_core::ai::ollama::OllamaBackend;
+use aliast_core::ai::ollama::SYSTEM_PROMPT;
+use aliast_core::ai::openai::OpenAiBackend;
+use aliast_core::ai::{AiBackend, AiError};
 
 /// Verify the AiBackend trait is object-safe by creating a Box<dyn AiBackend>.
 #[test]

@@ -5,8 +5,8 @@ use anyhow::Result;
 use tokio::net::UnixListener;
 use tokio_util::sync::CancellationToken;
 
-use alias_core::ai::AiBackend;
-use alias_core::history::HistoryStore;
+use aliast_core::ai::AiBackend;
+use aliast_core::history::HistoryStore;
 
 use crate::connection::handle_connection;
 use crate::lifecycle;
@@ -26,7 +26,7 @@ pub async fn run_server(
 
     let listener = UnixListener::bind(socket_path)?;
     tracing::info!("Listening on {:?}", socket_path);
-    eprintln!("alias-daemon: listening on {}", socket_path.display());
+    eprintln!("aliast-daemon: listening on {}", socket_path.display());
 
     loop {
         tokio::select! {

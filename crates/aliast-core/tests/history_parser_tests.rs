@@ -1,4 +1,4 @@
-use alias_core::history::{parse_history_file, HistoryEntry};
+use aliast_core::history::{parse_history_file, HistoryEntry};
 
 #[test]
 fn parse_plain_format() {

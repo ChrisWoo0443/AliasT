@@ -1,4 +1,4 @@
-use alias_protocol::{ProtocolError, Request, Response};
+use aliast_protocol::{ProtocolError, Request, Response};
 
 #[test]
 fn serialize_complete_request() {

@@ -1,7 +1,7 @@
 use std::os::unix::net::UnixListener;
 use std::path::PathBuf;
 
-use alias_daemon::lifecycle;
+use aliast_daemon::lifecycle;
 
 #[test]
 fn cleanup_removes_stale_socket_file() {
@@ -63,11 +63,11 @@ fn cleanup_creates_parent_directories_with_correct_permissions() {
 }
 
 #[test]
-fn default_socket_path_ends_with_alias_sock() {
+fn default_socket_path_ends_with_aliast_sock() {
     let path = lifecycle::default_socket_path();
     assert!(
-        path.ends_with("alias/alias.sock"),
-        "path should end with alias/alias.sock, got: {}",
+        path.ends_with("aliast/aliast.sock"),
+        "path should end with aliast/aliast.sock, got: {}",
         path.display()
     );
 }
@@ -84,7 +84,7 @@ fn default_socket_path_uses_xdg_runtime_dir() {
     let path = lifecycle::default_socket_path();
     assert_eq!(
         path,
-        PathBuf::from("/tmp/test-xdg-runtime/alias/alias.sock")
+        PathBuf::from("/tmp/test-xdg-runtime/aliast/aliast.sock")
     );
 
     // Restore original value
@@ -108,8 +108,8 @@ fn default_socket_path_fallback_without_xdg() {
     let path = lifecycle::default_socket_path();
 
     let uid = unsafe { libc::getuid() };
-    let expected = PathBuf::from(format!("/tmp/alias-{uid}/alias/alias.sock"));
-    assert_eq!(path, expected, "should fallback to /tmp/alias-{{uid}}/alias/alias.sock");
+    let expected = PathBuf::from(format!("/tmp/aliast-{uid}/aliast/aliast.sock"));
+    assert_eq!(path, expected, "should fallback to /tmp/aliast-{{uid}}/aliast/aliast.sock");
 
     // Restore original value
     if let Some(val) = original {

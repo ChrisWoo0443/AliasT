@@ -1,10 +1,10 @@
 [package]
-name = "alias-core"
+name = "aliast-core"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-alias-protocol = { path = "../alias-protocol" }
+aliast-protocol = { path = "../aliast-protocol" }
 rusqlite = { version = "0.39", features = ["bundled"] }
 async-trait = "0.1"
 reqwest = { version = "0.13", features = ["json"] }

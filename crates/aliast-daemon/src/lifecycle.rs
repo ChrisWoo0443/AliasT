@@ -34,16 +34,16 @@ pub fn cleanup_stale_socket(path: &Path) -> anyhow::Result<()> {
 
 /// Returns the default socket path following XDG conventions.
 ///
-/// Checks `XDG_RUNTIME_DIR` first, falls back to `/tmp/alias-{uid}/alias/alias.sock`.
+/// Checks `XDG_RUNTIME_DIR` first, falls back to `/tmp/aliast-{uid}/aliast/aliast.sock`.
 pub fn default_socket_path() -> PathBuf {
     if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
-        return PathBuf::from(runtime_dir).join("alias").join("alias.sock");
+        return PathBuf::from(runtime_dir).join("aliast").join("aliast.sock");
     }
 
     let uid = unsafe { libc::getuid() };
-    PathBuf::from(format!("/tmp/alias-{uid}"))
-        .join("alias")
-        .join("alias.sock")
+    PathBuf::from(format!("/tmp/aliast-{uid}"))
+        .join("aliast")
+        .join("aliast.sock")
 }
 
 /// Removes the socket file at the given path (best-effort, ignores errors).

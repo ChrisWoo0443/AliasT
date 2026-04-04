@@ -6,9 +6,9 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio_util::sync::CancellationToken;
 
-use alias_core::ai::AiBackend;
-use alias_core::history::{HistoryStore, SuggestionContext};
-use alias_protocol::{Request, Response};
+use aliast_core::ai::AiBackend;
+use aliast_core::history::{HistoryStore, SuggestionContext};
+use aliast_protocol::{Request, Response};
 
 /// Handles a single client connection, reading NDJSON requests and writing responses.
 ///
@@ -121,7 +121,7 @@ async fn dispatch_request(
                 git_branch,
             };
             let suggestion_text =
-                alias_core::suggest(&store_guard, &buf, &context).unwrap_or_default();
+                aliast_core::suggest(&store_guard, &buf, &context).unwrap_or_default();
             Response::Suggestion {
                 id,
                 text: suggestion_text,
@@ -170,7 +170,7 @@ async fn dispatch_request(
             }
             None => Response::Error {
                 id,
-                msg: "No AI model configured. Set ALIAS_NL_MODEL env var.".to_string(),
+                msg: "No AI model configured. Set ALIAST_NL_MODEL env var.".to_string(),
             },
         },
     }

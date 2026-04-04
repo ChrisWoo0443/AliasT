@@ -1,5 +1,5 @@
-use alias_core::history::{HistoryStore, SuggestionContext};
-use alias_core::suggest;
+use aliast_core::history::{HistoryStore, SuggestionContext};
+use aliast_core::suggest;
 
 #[test]
 fn suggest_returns_suffix_from_history() {

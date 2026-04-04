@@ -1,11 +1,11 @@
 [package]
-name = "alias-daemon"
+name = "aliast-daemon"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-alias-protocol = { path = "../alias-protocol" }
-alias-core = { path = "../alias-core" }
+aliast-protocol = { path = "../aliast-protocol" }
+aliast-core = { path = "../aliast-core" }
 tokio = { version = "1.50", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
