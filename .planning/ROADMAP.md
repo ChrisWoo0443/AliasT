@@ -132,7 +132,10 @@ Plans:
   1. Pushing a `v*.*.*` tag to GitHub triggers the release workflow automatically
   2. The workflow produces both `aliast-daemon-aarch64-apple-darwin.tar.gz` and `aliast-daemon-x86_64-apple-darwin.tar.gz` artifacts
   3. A GitHub Release is created with the tag name, containing the tarballed binaries, the plugin file, and SHA256 checksums
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 07-01-PLAN.md -- Release workflow: tag-triggered matrix build on native macOS runners, tarball packaging, GitHub Release creation
 
 ### Phase 8: Homebrew Tap + Formula
 **Goal**: Users can install AliasT with `brew tap cwoo017/aliast && brew install aliast` and have a working daemon + plugin
@@ -158,5 +161,5 @@ Phases execute in numeric order: 6 -> 7 -> 8
 | 4. Context & Ranking Intelligence | v1.0 | 2/2 | Complete | 2026-04-03 |
 | 5. Cloud Backends & Terminal Compat | v1.0 | 2/2 | Complete | 2026-04-03 |
 | 6. Project Rename | v1.1 | 0/2 | Planned | - |
-| 7. CI/CD Release Pipeline | v1.1 | 0/0 | Not started | - |
+| 7. CI/CD Release Pipeline | v1.1 | 0/1 | Planned | - |
 | 8. Homebrew Tap + Formula | v1.1 | 0/0 | Not started | - |
