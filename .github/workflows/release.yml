@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            runner: macos-15
+          - target: x86_64-apple-darwin
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build
+        run: cargo build --release -p aliast-daemon
+
+      - name: Verify binary architecture
+        run: file target/release/aliast-daemon
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: aliast-daemon-${{ matrix.target }}
+          path: target/release/aliast-daemon
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Package release assets
+        run: |
+          mkdir -p release
+
+          for arch in aarch64-apple-darwin x86_64-apple-darwin; do
+            tar -czf "release/aliast-daemon-${arch}.tar.gz" \
+              -C "artifacts/aliast-daemon-${arch}" aliast-daemon
+          done
+
+          cp plugin/aliast.plugin.zsh release/
+
+          cd release
+          sha256sum * > SHA256SUMS
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
