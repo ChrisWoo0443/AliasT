@@ -14,6 +14,7 @@ use aliast_core::history::{parse_history_file, HistoryStore};
 
 mod connection;
 mod lifecycle;
+pub mod migration;
 mod server;
 
 /// AliasT suggestion daemon -- serves ghost-text completions over a Unix socket.
@@ -72,6 +73,21 @@ fn init_tracing() -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Migrate data files from old alias/ to new aliast/ directory (best-effort, silent)
+    let old_data_dir = directories::BaseDirs::new()
+        .map(|dirs| dirs.data_local_dir().join("alias"))
+        .unwrap_or_else(|| {
+            let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+            PathBuf::from(home).join(".local").join("share").join("alias")
+        });
+    let new_data_dir = directories::BaseDirs::new()
+        .map(|dirs| dirs.data_local_dir().join("aliast"))
+        .unwrap_or_else(|| {
+            let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+            PathBuf::from(home).join(".local").join("share").join("aliast")
+        });
+    let _ = migration::migrate_data_files(&old_data_dir, &new_data_dir);
+
     init_tracing()?;
 
     let cli = Cli::parse();
