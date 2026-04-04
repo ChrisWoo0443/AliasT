@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
+milestone: v1.1
+milestone_name: AliasT + Homebrew Distribution
 status: verifying
-stopped_at: Completed 05-01-PLAN.md
-last_updated: "2026-04-03T19:51:20.886Z"
-last_activity: 2026-04-03
+stopped_at: Completed 06-01-PLAN.md
+last_updated: "2026-04-04T00:08:04.646Z"
+last_activity: 2026-04-04
 progress:
-  total_phases: 5
-  completed_phases: 2
-  total_plans: 13
-  completed_plans: 10
+  total_phases: 3
+  completed_phases: 0
+  total_plans: 2
+  completed_plans: 1
   percent: 0
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-02)
 Phase: 01 (daemon-ipc-ghost-text) — EXECUTING
 Plan: 3 of 3
 Status: Phase complete — ready for verification
-Last activity: 2026-04-03
+Last activity: 2026-04-04
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -62,6 +62,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 04 P01 | 6min | 2 tasks | 11 files |
 | Phase 04 P02 | 3min | 1 tasks | 1 files |
 | Phase 05-01 P01 | 2min | 2 tasks | 5 files |
+| Phase 06 P01 | 6min | 2 tasks | 34 files |
 
 ## Accumulated Context
 
@@ -90,6 +91,8 @@ Recent decisions affecting current work:
 - [Phase 05-01]: Reuse SYSTEM_PROMPT from ollama module for all cloud backends
 - [Phase 05-01]: with_base_url constructors on Claude/OpenAI backends for test isolation
 - [Phase 05-01]: Unknown ALIAS_NL_BACKEND values default to ollama for backward compat
+- [Phase 06]: Extracted migration into standalone module with parameterized paths for testability
+- [Phase 06]: Best-effort silent data migration before tracing init per D-02
 
 ### Pending Todos
 
@@ -103,6 +106,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-03T19:51:20.884Z
-Stopped at: Completed 05-01-PLAN.md
+Last session: 2026-04-04T00:08:04.644Z
+Stopped at: Completed 06-01-PLAN.md
 Resume file: None
