@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: AliasT + Homebrew Distribution
 status: verifying
-stopped_at: Completed 06-02-PLAN.md
-last_updated: "2026-04-04T00:03:34.498Z"
-last_activity: 2026-04-04
+stopped_at: Completed 07-01-PLAN.md
+last_updated: "2026-04-09T22:59:45.968Z"
+last_activity: 2026-04-09
 progress:
   total_phases: 3
-  completed_phases: 0
-  total_plans: 2
-  completed_plans: 1
+  completed_phases: 1
+  total_plans: 3
+  completed_plans: 2
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-02)
 
 **Core value:** Type less, execute faster -- ghost text suggestions appear as you type and a hotkey lets you describe what you want in plain English.
-**Current focus:** Phase 01 — daemon-ipc-ghost-text
+**Current focus:** Phase 07 — ci-cd-release-pipeline
 
 ## Current Position
 
-Phase: 01 (daemon-ipc-ghost-text) — EXECUTING
-Plan: 3 of 3
+Phase: 07 (ci-cd-release-pipeline) — EXECUTING
+Plan: 1 of 1
 Status: Phase complete — ready for verification
-Last activity: 2026-04-04
+Last activity: 2026-04-09
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -63,6 +63,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 04 P02 | 3min | 1 tasks | 1 files |
 | Phase 05-01 P01 | 2min | 2 tasks | 5 files |
 | Phase 06 P02 | 3min | 2 tasks | 2 files |
+| Phase 07 P01 | 4min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -93,6 +94,9 @@ Recent decisions affecting current work:
 - [Phase 05-01]: Unknown ALIAS_NL_BACKEND values default to ollama for backward compat
 - [Phase 06]: Skipped CLAUDE.md update: file not git-tracked, only in main repo
 - [Phase 06]: Deferred GitHub repo rename to post-merge step
+- [Phase 07]: Native macOS runners (macos-15 ARM64, macos-15-intel x86_64) instead of cross-compilation for arch-specific builds
+- [Phase 07]: Hand-written GitHub Actions workflow (~68 lines) instead of cargo-dist per stack decision D-02
+- [Phase 07]: Flat tarball structure so brew install extracts aliast-daemon directly at formula install time
 
 ### Pending Todos
 
@@ -106,6 +110,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-04T00:03:34.495Z
-Stopped at: Completed 06-02-PLAN.md
+Last session: 2026-04-09T22:59:45.966Z
+Stopped at: Completed 07-01-PLAN.md
 Resume file: None

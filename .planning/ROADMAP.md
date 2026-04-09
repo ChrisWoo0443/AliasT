@@ -135,7 +135,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 07-01-PLAN.md -- Release workflow: tag-triggered matrix build on native macOS runners, tarball packaging, GitHub Release creation
+- [x] 07-01-PLAN.md -- Release workflow: tag-triggered matrix build on native macOS runners, tarball packaging, GitHub Release creation
 
 ### Phase 8: Homebrew Tap + Formula
 **Goal**: Users can install AliasT with `brew tap cwoo017/aliast && brew install aliast` and have a working daemon + plugin
