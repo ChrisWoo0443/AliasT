@@ -138,15 +138,19 @@ Plans:
 - [x] 07-01-PLAN.md -- Release workflow: tag-triggered matrix build on native macOS runners, tarball packaging, GitHub Release creation
 
 ### Phase 8: Homebrew Tap + Formula
-**Goal**: Users can install AliasT with `brew tap cwoo017/aliast && brew install aliast` and have a working daemon + plugin
+**Goal**: Users can install AliasT with `brew tap ChrisWoo0443/aliast && brew install aliast` and have a working daemon + plugin
 **Depends on**: Phase 7
 **Requirements**: BREW-01, BREW-02, BREW-03, BREW-04
 **Success Criteria** (what must be TRUE):
-  1. `brew tap cwoo017/aliast && brew install aliast` succeeds on a clean machine
+  1. `brew tap ChrisWoo0443/aliast && brew install aliast` succeeds on a clean machine
   2. After install, `aliast-daemon --version` works (binary is on PATH) and the plugin file exists at `$HOMEBREW_PREFIX/share/aliast/aliast.plugin.zsh`
   3. `brew install` prints caveats with the exact `source` line the user needs to add to `.zshrc`
   4. Formula works on both Apple Silicon (`arm64`) and Intel (`x86_64`) Macs, downloading the correct architecture-specific binary
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 08-01-PLAN.md -- Create tap repo (ChrisWoo0443/homebrew-aliast), write Formula/aliast.rb with placeholder SHA256s, push
+- [ ] 08-02-PLAN.md -- Populate real SHA256 values from a release, verify brew tap + brew install end-to-end
 
 ## Progress
 
@@ -162,4 +166,4 @@ Phases execute in numeric order: 6 -> 7 -> 8
 | 5. Cloud Backends & Terminal Compat | v1.0 | 2/2 | Complete | 2026-04-03 |
 | 6. Project Rename | v1.1 | 0/2 | Planned | - |
 | 7. CI/CD Release Pipeline | v1.1 | 0/1 | Planned | - |
-| 8. Homebrew Tap + Formula | v1.1 | 0/0 | Not started | - |
+| 8. Homebrew Tap + Formula | v1.1 | 0/2 | Planned | - |
