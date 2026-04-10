@@ -81,11 +81,11 @@ Plans:
   2. Running `aliast --help` includes AI setup guidance with environment variable names, Ollama instructions, and cloud backend configuration
   3. NL mode displays a colored unicode dot instead of `[NL]` text in the prompt
   4. CI workflow and Homebrew formula produce and reference the `aliast` binary name (not `aliast-daemon`)
-**Plans**: TBD
-**UI hint**: yes
+**Plans**: 2 plans
 
 Plans:
-- [ ] 11-01: TBD
+- [x] 11-01-PLAN.md — NL indicator: replace [NL] text with blue unicode dot via region_highlight
+- [ ] 11-02-PLAN.md — Two-tier CLI help output with AI setup guidance + CLI-03 verification
 
 ## Progress
 
@@ -103,5 +103,5 @@ Phases execute in numeric order: 9 -> 10 -> 11
 | 7. CI/CD Release Pipeline | v1.1 | 1/1 | Complete | 2026-04-09 |
 | 8. Homebrew Tap + Formula | v1.1 | 2/2 | Complete | 2026-04-10 |
 | 9. Binary Rename + Version Foundations | v1.2 | 3/3 | Executing | - |
-| 10. Daemon Lifecycle | v1.2 | 4/4 | Complete   | 2026-04-10 |
-| 11. CLI UX + NL Indicator | v1.2 | 0/? | Not started | - |
+| 10. Daemon Lifecycle | v1.2 | 4/4 | Complete    | 2026-04-10 |
+| 11. CLI UX + NL Indicator | v1.2 | 1/2 | Executing | - |

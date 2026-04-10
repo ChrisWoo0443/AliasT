@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: CLI Polish & Reliability
+milestone: v1.1
+milestone_name: AliasT + Homebrew Distribution
 status: verifying
-stopped_at: Completed 10-04-PLAN.md
-last_updated: "2026-04-10T19:37:58.045Z"
+stopped_at: Completed 11-01-PLAN.md
+last_updated: "2026-04-10T23:25:41.908Z"
 last_activity: 2026-04-10
 progress:
   total_phases: 3
   completed_phases: 2
-  total_plans: 7
-  completed_plans: 7
+  total_plans: 5
+  completed_plans: 4
   percent: 0
 ---
 
@@ -65,8 +65,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 06 P02 | 3min | 2 tasks | 2 files |
 | Phase 07 P01 | 4min | 2 tasks | 1 files |
 | Phase 08 P01 | 1min | 1 tasks | 2 files |
-| Phase 10 P03 | 4min | 2 tasks | 7 files |
-| Phase 10 P04 | 3min | 2 tasks | 7 files |
+| Phase 11 P01 | 2min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -102,8 +101,8 @@ Recent decisions affecting current work:
 - [Phase 07]: Flat tarball structure so brew install extracts aliast-daemon directly at formula install time
 - [Phase 08]: Placeholder SHA256 values in formula — real values inserted after first release in Plan 02
 - [Phase 08]: Tap repo uses explicit elsif Hardware::CPU.intel? (not bare else) for fail-closed arch handling
-- [Phase 10]: Added check_daemon_running_at() testable variant for deterministic test isolation from live daemon state
-- [Phase 10]: String (not Option) for backend/model in Status -- 'none'/'' convention avoids null handling
+- [Phase 11]: Helper function _aliast_nl_set_indicator to DRY 8 identical PREDISPLAY + region_highlight call sites
+- [Phase 11]: region_highlight P flag for PREDISPLAY coloring with memo=aliast-nl cleanup tag
 
 ### Pending Todos
 
@@ -117,6 +116,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-10T19:37:58.043Z
-Stopped at: Completed 10-04-PLAN.md
+Last session: 2026-04-10T23:25:41.906Z
+Stopped at: Completed 11-01-PLAN.md
 Resume file: None
