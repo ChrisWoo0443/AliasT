@@ -12,7 +12,7 @@ Requirements for CLI polish & reliability milestone. Each maps to roadmap phases
 - [ ] **LIFE-01**: Daemon auto-starts on first plugin load (not just on reconnect)
 - [x] **LIFE-02**: User can stop a running daemon via `aliast stop`
 - [x] **LIFE-03**: User can toggle suggestions on/off via `aliast on` / `aliast off`
-- [ ] **LIFE-04**: User can check system health via `aliast doctor` (daemon status, AI backend, plugin)
+- [x] **LIFE-04**: User can check system health via `aliast doctor` (daemon status, AI backend, plugin)
 
 ### Binary & Version
 
@@ -67,7 +67,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LIFE-01 | Phase 10 | Pending |
 | LIFE-02 | Phase 10 | Complete |
 | LIFE-03 | Phase 10 | Complete |
-| LIFE-04 | Phase 10 | Pending |
+| LIFE-04 | Phase 10 | Complete |
 | CLI-01 | Phase 11 | Pending |
 | CLI-02 | Phase 11 | Pending |
 | CLI-03 | Phase 11 | Pending |

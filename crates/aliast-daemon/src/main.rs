@@ -239,18 +239,21 @@ async fn main() -> Result<()> {
                 server::run_server(&socket_path, state).await
             });
 
-            // Wait for shutdown signals
+            // Wait for shutdown signals OR cancellation from IPC shutdown command
             let mut sigterm = signal(SignalKind::terminate())?;
             tokio::select! {
                 _ = tokio::signal::ctrl_c() => {
                     tracing::info!("Received SIGINT, shutting down");
+                    cancel_token.cancel();
                 }
                 _ = sigterm.recv() => {
                     tracing::info!("Received SIGTERM, shutting down");
+                    cancel_token.cancel();
+                }
+                _ = cancel_token.cancelled() => {
+                    tracing::info!("Received IPC shutdown, shutting down");
                 }
             }
-
-            cancel_token.cancel();
 
             // Wait for server to finish cleanup
             if let Err(err) = server_handle.await? {
