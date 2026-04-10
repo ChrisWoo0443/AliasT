@@ -1,1 +1,6 @@
 /target/
+.env
+*.db
+.claude/
+.planning/
+CLAUDE.md
