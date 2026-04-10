@@ -1,59 +1,47 @@
-# Requirements: Alias
+# Requirements: AliasT
 
-**Defined:** 2026-04-02
-**Core Value:** Type less, execute faster -- ghost text suggestions appear as you type and a hotkey lets you describe what you want in plain English.
+**Defined:** 2026-04-10
+**Core Value:** Type less, execute faster — ghost text suggestions appear as you type and a hotkey lets you describe what you want in plain English.
 
-## v1 Requirements
+## v1.2 Requirements
 
-Requirements for initial release. Each maps to roadmap phases.
+Requirements for CLI polish & reliability milestone. Each maps to roadmap phases.
 
-### Core Infrastructure
+### Daemon Lifecycle
 
-- [x] **INFRA-01**: Rust daemon listens on a Unix domain socket and processes suggestion requests asynchronously
-- [x] **INFRA-02**: Zsh ZLE widget renders ghost-text suggestions via POSTDISPLAY with dimmed styling
-- [x] **INFRA-03**: Zsh plugin communicates with daemon non-blockingly via zle -F fd callbacks
-- [x] **INFRA-04**: NDJSON protocol between zsh plugin and Rust daemon for structured message exchange
+- [ ] **LIFE-01**: Daemon auto-starts on first plugin load (not just on reconnect)
+- [ ] **LIFE-02**: User can stop a running daemon via `aliast stop`
+- [ ] **LIFE-03**: User can toggle suggestions on/off via `aliast on` / `aliast off`
+- [ ] **LIFE-04**: User can check system health via `aliast doctor` (daemon status, AI backend, plugin)
 
-### Inline Suggestions
+### Binary & Version
 
-- [x] **SUGG-01**: User sees ghost-text suggestion from shell history within 100ms of typing
-- [ ] **SUGG-02**: User can accept full suggestion with Tab or Right-arrow
-- [ ] **SUGG-03**: User can accept suggestion word-by-word with Alt+Right
-- [x] **SUGG-04**: Suggestions are ranked by frecency (recency + frequency + directory affinity + exit code)
-- [x] **SUGG-05**: Suggestions are context-aware using cwd, git status, last exit code, and env vars
-- [x] **SUGG-06**: History is indexed in SQLite with metadata (command, timestamp, cwd, exit code, duration)
+- [ ] **BIN-01**: Binary is named `aliast` (not `aliast-daemon`)
+- [ ] **BIN-02**: All workspace crates use `version.workspace = true` from root Cargo.toml
+- [ ] **BIN-03**: Test assertions use `env!("CARGO_PKG_VERSION")` instead of hardcoded `"0.1.0"`
 
-### Natural Language Mode
+### CLI UX
 
-- [ ] **NL-01**: User can toggle into natural language mode via a configurable hotkey
-- [x] **NL-02**: User types plain English and receives a generated shell command
-- [ ] **NL-03**: Generated command appears in editable buffer for review -- never auto-executes
-- [ ] **NL-04**: User can accept (Enter), edit, or reject (Escape) generated commands
-- [x] **NL-05**: Ollama backend works out of the box for local-first AI (no API keys required)
-- [x] **NL-06**: Cloud AI backends supported (Claude API, OpenAI API) via API key configuration
-- [x] **NL-07**: AI backend is abstracted behind a trait so backends are swappable via config
+- [ ] **CLI-01**: `aliast -h` shows compact subcommand overview
+- [ ] **CLI-02**: `aliast --help` includes AI setup guidance (env vars, Ollama, cloud backends)
+- [ ] **CLI-03**: CI workflow and Homebrew formula updated for `aliast` binary name
 
-### Terminal Compatibility
+### NL Mode Indicator
 
-- [ ] **TERM-01**: Plugin works in iTerm2, Terminal.app, Kitty, Ghostty, and Alacritty
-- [ ] **TERM-02**: Ghost-text styling is configurable to handle different terminal color schemes
+- [ ] **NL-01**: NL mode displays unicode colored dot (`●`) instead of `[NL]` text
+- [ ] **NL-02**: Indicator renders via PREDISPLAY + `region_highlight` with `P` flag for color
 
-## v2 Requirements
+## Future Requirements
 
 Deferred to future release. Tracked but not in current roadmap.
 
-### Enhanced Intelligence
+### Compatibility
 
-- **INTEL-01**: AI-powered inline completion (tiered: instant history, async AI replacement)
-- **INTEL-02**: Command explanation on demand via hotkey
-- **INTEL-03**: Error-aware next-command suggestion after non-zero exit
+- **COMPAT-01**: Compatibility symlink (`aliast-daemon` → `aliast`) for existing users
 
-### Configuration & Distribution
+### Persistence
 
-- **DIST-01**: TOML configuration file at ~/.config/alias/config.toml
-- **DIST-02**: Homebrew tap for daemon binary installation
-- **DIST-03**: Plugin manager compatibility (oh-my-zsh, zinit, antidote)
-- **DIST-04**: Snippet/abbreviation expansion from user-defined shortcuts
+- **PERSIST-01**: On/off toggle state persists across daemon restarts
 
 ## Out of Scope
 
@@ -61,14 +49,11 @@ Explicitly excluded. Documented to prevent scope creep.
 
 | Feature | Reason |
 |---------|--------|
-| Full terminal emulator | Massive scope -- Warp has 100+ engineers. Plugin composability beats monoliths. |
-| Auto-execute AI commands | Catastrophic risk -- AI models hallucinate. Every serious tool requires confirmation. |
-| Dropdown completion menu | Ghost text is simpler, less intrusive, fewer terminal compat issues. |
-| Multi-shell support (bash/fish) | Each shell has different line editing APIs. Zsh-only for v1. |
-| Cross-platform (Linux/Windows) | macOS + zsh is the tightest target. Rust compiles cross-platform for later. |
-| Telemetry/analytics | Privacy is core differentiator. Zero telemetry, all data local. |
-| Cloud history sync | Adds server infra and trust burden. Atuin already does this well. |
-| Real-time streaming suggestions | Flickering ghost text is distracting. Show complete suggestion only. |
+| Interactive setup wizard | Violates "config via dotfiles" constraint |
+| PID file for daemon management | Race-prone; socket-based IPC is safer |
+| ANSI escape codes in PREDISPLAY | Zsh doesn't support them there; use region_highlight |
+| Non-macOS support | macOS-only constraint unchanged |
+| Non-zsh shell support | zsh-only constraint unchanged |
 
 ## Traceability
 
@@ -76,31 +61,24 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INFRA-01 | Phase 1 | Complete |
-| INFRA-02 | Phase 1 | Complete |
-| INFRA-03 | Phase 1 | Complete |
-| INFRA-04 | Phase 1 | Complete |
-| SUGG-01 | Phase 2 | Complete |
-| SUGG-02 | Phase 2 | Pending |
-| SUGG-03 | Phase 2 | Pending |
-| SUGG-04 | Phase 4 | Complete |
-| SUGG-05 | Phase 4 | Complete |
-| SUGG-06 | Phase 2 | Complete |
-| NL-01 | Phase 3 | Pending |
-| NL-02 | Phase 3 | Complete |
-| NL-03 | Phase 3 | Pending |
-| NL-04 | Phase 3 | Pending |
-| NL-05 | Phase 3 | Complete |
-| NL-06 | Phase 5 | Complete |
-| NL-07 | Phase 3 | Complete |
-| TERM-01 | Phase 5 | Pending |
-| TERM-02 | Phase 5 | Pending |
+| BIN-01 | Phase 9 | Pending |
+| BIN-02 | Phase 9 | Pending |
+| BIN-03 | Phase 9 | Pending |
+| LIFE-01 | Phase 10 | Pending |
+| LIFE-02 | Phase 10 | Pending |
+| LIFE-03 | Phase 10 | Pending |
+| LIFE-04 | Phase 10 | Pending |
+| CLI-01 | Phase 11 | Pending |
+| CLI-02 | Phase 11 | Pending |
+| CLI-03 | Phase 11 | Pending |
+| NL-01 | Phase 11 | Pending |
+| NL-02 | Phase 11 | Pending |
 
 **Coverage:**
-- v1 requirements: 19 total
-- Mapped to phases: 19
+- v1.2 requirements: 12 total
+- Mapped to phases: 12
 - Unmapped: 0
 
 ---
-*Requirements defined: 2026-04-02*
-*Last updated: 2026-04-02 after roadmap creation*
+*Requirements defined: 2026-04-10*
+*Last updated: 2026-04-10 after roadmap creation*
