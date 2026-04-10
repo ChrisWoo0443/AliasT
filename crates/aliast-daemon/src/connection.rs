@@ -1,3 +1,4 @@
+use std::sync::atomic::Ordering;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
@@ -48,7 +49,25 @@ pub async fn handle_connection(
                 }
 
                 let response = match serde_json::from_str::<Request>(trimmed) {
-                    Ok(request) => dispatch_request(request, &state).await,
+                    Ok(request) => {
+                        // Handle shutdown inline to avoid race condition:
+                        // write ShuttingDown ack BEFORE cancelling root token
+                        if matches!(&request, Request::Shutdown { .. }) {
+                            let id = match request {
+                                Request::Shutdown { id } => id,
+                                _ => unreachable!(),
+                            };
+                            let response = Response::ShuttingDown { id };
+                            let mut response_json = serde_json::to_string(&response)?;
+                            response_json.push('\n');
+                            writer.write_all(response_json.as_bytes()).await?;
+                            writer.flush().await?;
+                            // Cancel ROOT token (from DaemonState, not child_token)
+                            state.cancel_token.cancel();
+                            break;
+                        }
+                        dispatch_request(request, &state).await
+                    }
                     Err(parse_error) => Response::Error {
                         id: "unknown".to_string(),
                         msg: parse_error.to_string(),
@@ -109,6 +128,9 @@ async fn dispatch_request(request: Request, state: &DaemonState) -> Response {
             exit_code,
             git_branch,
         } => {
+            if !state.enabled.load(Ordering::Relaxed) {
+                return Response::Suggestion { id, text: String::new() };
+            }
             let store_guard = state.store.lock().unwrap();
             let context = SuggestionContext {
                 cwd,
@@ -144,44 +166,56 @@ async fn dispatch_request(request: Request, state: &DaemonState) -> Response {
             cwd,
             exit_code,
             git_branch,
-        } => match &state.ai_backend {
-            Some(backend) => {
-                let enriched = enrich_prompt(
-                    &prompt,
-                    cwd.as_deref(),
-                    exit_code,
-                    git_branch.as_deref(),
-                );
-                match backend.generate(&enriched).await {
-                    Ok(command_text) => Response::Command {
-                        id,
-                        text: command_text,
-                    },
-                    Err(err) => Response::Error {
-                        id,
-                        msg: err.to_string(),
-                    },
-                }
+        } => {
+            if !state.enabled.load(Ordering::Relaxed) {
+                return Response::Error {
+                    id,
+                    msg: "aliast is paused. Run `aliast on` to resume.".to_string(),
+                };
             }
-            None => Response::Error {
-                id,
-                msg: "No AI model configured. Set ALIAST_NL_MODEL env var.".to_string(),
-            },
-        },
+            match &state.ai_backend {
+                Some(backend) => {
+                    let enriched = enrich_prompt(
+                        &prompt,
+                        cwd.as_deref(),
+                        exit_code,
+                        git_branch.as_deref(),
+                    );
+                    match backend.generate(&enriched).await {
+                        Ok(command_text) => Response::Command {
+                            id,
+                            text: command_text,
+                        },
+                        Err(err) => Response::Error {
+                            id,
+                            msg: err.to_string(),
+                        },
+                    }
+                }
+                None => Response::Error {
+                    id,
+                    msg: "No AI model configured. Set ALIAST_NL_MODEL env var.".to_string(),
+                },
+            }
+        }
         Request::Shutdown { id } => {
-            // Stub: will be wired in Plan 02
+            // Shutdown is handled inline in handle_connection to avoid
+            // the race condition where cancel_token.cancel() would race
+            // the response write. This arm is unreachable but kept for completeness.
             Response::ShuttingDown { id }
         }
         Request::Enable { id } => {
-            // Stub: will be wired in Plan 02
+            state.enabled.store(true, Ordering::Relaxed);
+            tracing::info!("suggestions enabled");
             Response::Ack { id }
         }
         Request::Disable { id } => {
-            // Stub: will be wired in Plan 02
+            state.enabled.store(false, Ordering::Relaxed);
+            tracing::info!("suggestions disabled");
             Response::Ack { id }
         }
         Request::GetStatus { id } => {
-            let enabled = state.enabled.load(std::sync::atomic::Ordering::Relaxed);
+            let enabled = state.enabled.load(Ordering::Relaxed);
             Response::Status {
                 id,
                 enabled,
