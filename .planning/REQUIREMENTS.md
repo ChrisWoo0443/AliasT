@@ -25,7 +25,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Natural Language Mode
 
-- [ ] **NL-01**: User can toggle into natural language mode via a configurable hotkey
+- [x] **NL-01**: User can toggle into natural language mode via a configurable hotkey
 - [x] **NL-02**: User types plain English and receives a generated shell command
 - [ ] **NL-03**: Generated command appears in editable buffer for review -- never auto-executes
 - [ ] **NL-04**: User can accept (Enter), edit, or reject (Escape) generated commands
@@ -86,7 +86,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SUGG-04 | Phase 4 | Complete |
 | SUGG-05 | Phase 4 | Complete |
 | SUGG-06 | Phase 2 | Complete |
-| NL-01 | Phase 3 | Pending |
+| NL-01 | Phase 3 | Complete |
 | NL-02 | Phase 3 | Complete |
 | NL-03 | Phase 3 | Pending |
 | NL-04 | Phase 3 | Pending |
