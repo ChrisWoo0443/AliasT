@@ -5,6 +5,7 @@
 //! responses -- proving the complete communication loop works over Unix domain
 //! sockets with real history data.
 
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
@@ -15,6 +16,7 @@ use tokio_util::sync::CancellationToken;
 
 use aliast_core::ai::{AiBackend, AiError};
 use aliast_core::history::HistoryStore;
+use aliast_daemon::DaemonState;
 use aliast_daemon::server;
 use aliast_protocol::Response;
 
@@ -64,12 +66,16 @@ async fn spawn_daemon() -> (std::path::PathBuf, CancellationToken, tempfile::Tem
     let store = HistoryStore::open(&db_path).unwrap();
     let shared_store = Arc::new(Mutex::new(store));
 
+    let state = DaemonState {
+        store: shared_store,
+        ai_backend: None,
+        cancel_token: cancel_token.clone(),
+        enabled: Arc::new(AtomicBool::new(true)),
+    };
+
     let server_path = socket_path.clone();
-    let server_token = cancel_token.clone();
     tokio::spawn(async move {
-        server::run_server(&server_path, server_token, shared_store, None)
-            .await
-            .unwrap();
+        server::run_server(&server_path, state).await.unwrap();
     });
 
     // Wait for server to bind the socket
@@ -91,12 +97,16 @@ async fn spawn_daemon_with_ai(
     let store = HistoryStore::open(&db_path).unwrap();
     let shared_store = Arc::new(Mutex::new(store));
 
+    let state = DaemonState {
+        store: shared_store,
+        ai_backend: Some(backend),
+        cancel_token: cancel_token.clone(),
+        enabled: Arc::new(AtomicBool::new(true)),
+    };
+
     let server_path = socket_path.clone();
-    let server_token = cancel_token.clone();
     tokio::spawn(async move {
-        server::run_server(&server_path, server_token, shared_store, Some(backend))
-            .await
-            .unwrap();
+        server::run_server(&server_path, state).await.unwrap();
     });
 
     // Wait for server to bind the socket

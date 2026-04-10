@@ -1,4 +1,3 @@
-use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
@@ -6,9 +5,10 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio_util::sync::CancellationToken;
 
-use aliast_core::ai::AiBackend;
-use aliast_core::history::{HistoryStore, SuggestionContext};
+use aliast_core::history::SuggestionContext;
 use aliast_protocol::{Request, Response};
+
+use crate::DaemonState;
 
 /// Handles a single client connection, reading NDJSON requests and writing responses.
 ///
@@ -18,8 +18,7 @@ use aliast_protocol::{Request, Response};
 pub async fn handle_connection(
     stream: UnixStream,
     cancel_token: CancellationToken,
-    store: Arc<Mutex<HistoryStore>>,
-    ai_backend: Option<Arc<dyn AiBackend>>,
+    state: DaemonState,
 ) -> Result<()> {
     let (reader, mut writer) = stream.into_split();
     let mut buf_reader = BufReader::new(reader);
@@ -49,7 +48,7 @@ pub async fn handle_connection(
                 }
 
                 let response = match serde_json::from_str::<Request>(trimmed) {
-                    Ok(request) => dispatch_request(request, &store, &ai_backend).await,
+                    Ok(request) => dispatch_request(request, &state).await,
                     Err(parse_error) => Response::Error {
                         id: "unknown".to_string(),
                         msg: parse_error.to_string(),
@@ -96,11 +95,7 @@ pub fn enrich_prompt(
 }
 
 /// Dispatches a parsed request to the appropriate handler.
-async fn dispatch_request(
-    request: Request,
-    store: &Arc<Mutex<HistoryStore>>,
-    ai_backend: &Option<Arc<dyn AiBackend>>,
-) -> Response {
+async fn dispatch_request(request: Request, state: &DaemonState) -> Response {
     match request {
         Request::Ping { id } => Response::Pong {
             id,
@@ -114,7 +109,7 @@ async fn dispatch_request(
             exit_code,
             git_branch,
         } => {
-            let store_guard = store.lock().unwrap();
+            let store_guard = state.store.lock().unwrap();
             let context = SuggestionContext {
                 cwd,
                 exit_code,
@@ -133,7 +128,7 @@ async fn dispatch_request(
             cwd,
             exit_code,
         } => {
-            let store_guard = store.lock().unwrap();
+            let store_guard = state.store.lock().unwrap();
             let timestamp = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
@@ -149,7 +144,7 @@ async fn dispatch_request(
             cwd,
             exit_code,
             git_branch,
-        } => match ai_backend {
+        } => match &state.ai_backend {
             Some(backend) => {
                 let enriched = enrich_prompt(
                     &prompt,
@@ -173,5 +168,25 @@ async fn dispatch_request(
                 msg: "No AI model configured. Set ALIAST_NL_MODEL env var.".to_string(),
             },
         },
+        Request::Shutdown { id } => {
+            // Stub: will be wired in Plan 02
+            Response::ShuttingDown { id }
+        }
+        Request::Enable { id } => {
+            // Stub: will be wired in Plan 02
+            Response::Ack { id }
+        }
+        Request::Disable { id } => {
+            // Stub: will be wired in Plan 02
+            Response::Ack { id }
+        }
+        Request::GetStatus { id } => {
+            let enabled = state.enabled.load(std::sync::atomic::Ordering::Relaxed);
+            Response::Status {
+                id,
+                enabled,
+                version: env!("CARGO_PKG_VERSION").to_string(),
+            }
+        }
     }
 }

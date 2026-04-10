@@ -1,27 +1,18 @@
 use std::path::Path;
-use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
 use tokio::net::UnixListener;
-use tokio_util::sync::CancellationToken;
-
-use aliast_core::ai::AiBackend;
-use aliast_core::history::HistoryStore;
 
 use crate::connection::handle_connection;
 use crate::lifecycle;
+use crate::DaemonState;
 
 /// Runs the daemon server, listening for connections on the given Unix socket path.
 ///
 /// Cleans up any stale socket file before binding, then enters an accept loop.
 /// Each accepted connection is spawned as a separate tokio task. The server
 /// exits when the cancellation token is triggered, cleaning up the socket file.
-pub async fn run_server(
-    socket_path: &Path,
-    cancel_token: CancellationToken,
-    store: Arc<Mutex<HistoryStore>>,
-    ai_backend: Option<Arc<dyn AiBackend>>,
-) -> Result<()> {
+pub async fn run_server(socket_path: &Path, state: DaemonState) -> Result<()> {
     lifecycle::cleanup_stale_socket(socket_path)?;
 
     let listener = UnixListener::bind(socket_path)?;
@@ -30,18 +21,17 @@ pub async fn run_server(
 
     loop {
         tokio::select! {
-            _ = cancel_token.cancelled() => {
+            _ = state.cancel_token.cancelled() => {
                 tracing::info!("Shutdown signal received, stopping server");
                 break;
             }
             accept_result = listener.accept() => {
                 match accept_result {
                     Ok((stream, _addr)) => {
-                        let child_token = cancel_token.child_token();
-                        let conn_store = store.clone();
-                        let conn_ai = ai_backend.clone();
+                        let child_token = state.cancel_token.child_token();
+                        let conn_state = state.clone();
                         tokio::spawn(async move {
-                            if let Err(err) = handle_connection(stream, child_token, conn_store, conn_ai).await {
+                            if let Err(err) = handle_connection(stream, child_token, conn_state).await {
                                 tracing::error!("Connection handler error: {err}");
                             }
                         });
