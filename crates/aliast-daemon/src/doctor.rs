@@ -88,13 +88,17 @@ pub fn check_daemon_running_at(socket_path: &Path) -> DoctorCheck {
 pub fn check_ai_backend_configured() -> DoctorCheck {
     let backend = std::env::var("ALIAST_NL_BACKEND").unwrap_or_default();
     let model = std::env::var("ALIAST_NL_MODEL").ok().filter(|m| !m.is_empty());
+    check_ai_backend_configured_with(&backend, model.as_deref())
+}
 
+/// Testable variant that accepts values directly.
+pub fn check_ai_backend_configured_with(backend: &str, model: Option<&str>) -> DoctorCheck {
     match model {
         Some(model_name) => {
             let backend_display = if backend.is_empty() {
                 "ollama (default)"
             } else {
-                &backend
+                backend
             };
             DoctorCheck {
                 name: "AI backend configured",
@@ -118,8 +122,14 @@ pub fn check_ai_backend_configured() -> DoctorCheck {
 pub fn check_api_key_present() -> DoctorCheck {
     let backend = std::env::var("ALIAST_NL_BACKEND")
         .unwrap_or_else(|_| "ollama".to_string());
+    let claude_key = std::env::var("ALIAST_ANTHROPIC_KEY").ok().filter(|k| !k.is_empty());
+    let openai_key = std::env::var("ALIAST_OPENAI_KEY").ok().filter(|k| !k.is_empty());
+    check_api_key_present_with(&backend, claude_key.is_some(), openai_key.is_some())
+}
 
-    match backend.as_str() {
+/// Testable variant that accepts values directly.
+pub fn check_api_key_present_with(backend: &str, has_claude_key: bool, has_openai_key: bool) -> DoctorCheck {
+    match backend {
         "ollama" | "" => DoctorCheck {
             name: "API key present",
             passed: true,
@@ -127,11 +137,7 @@ pub fn check_api_key_present() -> DoctorCheck {
             fix: None,
         },
         "claude" => {
-            let has_key = std::env::var("ALIAST_ANTHROPIC_KEY")
-                .ok()
-                .filter(|k| !k.is_empty())
-                .is_some();
-            if has_key {
+            if has_claude_key {
                 DoctorCheck {
                     name: "API key present",
                     passed: true,
@@ -150,11 +156,7 @@ pub fn check_api_key_present() -> DoctorCheck {
             }
         }
         "openai" => {
-            let has_key = std::env::var("ALIAST_OPENAI_KEY")
-                .ok()
-                .filter(|k| !k.is_empty())
-                .is_some();
-            if has_key {
+            if has_openai_key {
                 DoctorCheck {
                     name: "API key present",
                     passed: true,
