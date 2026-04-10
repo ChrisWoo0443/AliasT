@@ -33,7 +33,7 @@
 **Milestone Goal:** Fix daemon lifecycle bugs, rename binary to `aliast`, add AI setup guidance, and polish the NL mode indicator.
 
 - [ ] **Phase 9: Binary Rename + Version Foundations** - Rename binary from `aliast-daemon` to `aliast` and unify workspace versions
-- [ ] **Phase 10: Daemon Lifecycle** - Complete daemon start/stop/toggle/doctor control via CLI
+- [x] **Phase 10: Daemon Lifecycle** - Complete daemon start/stop/toggle/doctor control via CLI (completed 2026-04-10)
 - [ ] **Phase 11: CLI UX + NL Indicator** - Polish help output, add AI setup guidance, and replace NL text indicator with colored dot
 
 ## Phase Details
@@ -67,8 +67,8 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 10-01-PLAN.md — Protocol additions (Shutdown/Enable/Disable/GetStatus) + DaemonState refactor
-- [ ] 10-02-PLAN.md — Stop/On/Off/Status CLI subcommands + dispatch handlers + enabled-check gating
+- [x] 10-01-PLAN.md — Protocol additions (Shutdown/Enable/Disable/GetStatus) + DaemonState refactor
+- [x] 10-02-PLAN.md — Stop/On/Off/Status CLI subcommands + dispatch handlers + enabled-check gating
 - [ ] 10-03-PLAN.md — Doctor diagnostic subcommand + plugin auto-start fix
 
 ### Phase 11: CLI UX + NL Indicator
@@ -102,5 +102,5 @@ Phases execute in numeric order: 9 -> 10 -> 11
 | 7. CI/CD Release Pipeline | v1.1 | 1/1 | Complete | 2026-04-09 |
 | 8. Homebrew Tap + Formula | v1.1 | 2/2 | Complete | 2026-04-10 |
 | 9. Binary Rename + Version Foundations | v1.2 | 3/3 | Executing | - |
-| 10. Daemon Lifecycle | v1.2 | 0/3 | Not started | - |
+| 10. Daemon Lifecycle | v1.2 | 2/1 | Complete   | 2026-04-10 |
 | 11. CLI UX + NL Indicator | v1.2 | 0/? | Not started | - |
