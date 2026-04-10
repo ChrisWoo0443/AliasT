@@ -52,6 +52,27 @@ enum Commands {
 ///
 /// Logs to `~/.local/share/aliast/daemon.log`.
 /// Log level is controlled by `ALIAST_LOG_LEVEL` env var, defaulting to `warn`.
+/// Send an NDJSON request to the daemon and read the response.
+/// Uses sync UnixStream -- no tokio runtime needed.
+fn send_ipc_request(request_json: &str) -> Result<String> {
+    let socket_path = lifecycle::default_socket_path();
+    let stream = std::os::unix::net::UnixStream::connect(&socket_path)
+        .map_err(|_| anyhow::anyhow!("aliast: daemon is not running"))?;
+    stream.set_read_timeout(Some(std::time::Duration::from_secs(5)))?;
+
+    use std::io::{BufRead, Write};
+    let mut writer = std::io::BufWriter::new(&stream);
+    let mut line = request_json.to_string();
+    line.push('\n');
+    writer.write_all(line.as_bytes())?;
+    writer.flush()?;
+
+    let mut reader = std::io::BufReader::new(&stream);
+    let mut response_line = String::new();
+    reader.read_line(&mut response_line)?;
+    Ok(response_line)
+}
+
 fn init_tracing() -> Result<()> {
     let log_dir = directories::BaseDirs::new()
         .map(|dirs| dirs.data_local_dir().join("aliast"))
@@ -227,24 +248,76 @@ async fn main() -> Result<()> {
             tracing::info!("Daemon stopped cleanly");
         }
         Commands::Stop => {
-            eprintln!("aliast stop: not yet implemented");
+            match send_ipc_request(r#"{"id":"stop-1","type":"shutdown"}"#) {
+                Ok(response) => {
+                    if response.contains("\"shutting_down\"") {
+                        println!("aliast: daemon stopped");
+                    } else {
+                        eprintln!("aliast: unexpected response from daemon");
+                        std::process::exit(1);
+                    }
+                }
+                Err(err) => {
+                    eprintln!("{}", err);
+                    std::process::exit(1);
+                }
+            }
         }
         Commands::Status => {
             let socket_path = lifecycle::default_socket_path();
-            match std::os::unix::net::UnixStream::connect(&socket_path) {
-                Ok(_) => {
-                    println!("aliast is running (socket: {})", socket_path.display());
+            match send_ipc_request(r#"{"id":"status-1","type":"get_status"}"#) {
+                Ok(response) => {
+                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&response) {
+                        if parsed["type"] == "status" {
+                            let enabled = parsed["enabled"].as_bool().unwrap_or(true);
+                            let version = parsed["version"].as_str().unwrap_or("unknown");
+                            let status_label = if enabled { "enabled" } else { "disabled" };
+                            println!("aliast v{} is running ({})", version, status_label);
+                            println!("  socket: {}", socket_path.display());
+                        } else {
+                            println!("aliast is running (socket: {})", socket_path.display());
+                        }
+                    } else {
+                        println!("aliast is running (socket: {})", socket_path.display());
+                    }
                 }
                 Err(_) => {
                     println!("aliast is not running");
+                    std::process::exit(1);
                 }
             }
         }
         Commands::On => {
-            eprintln!("aliast on: not yet implemented");
+            match send_ipc_request(r#"{"id":"on-1","type":"enable"}"#) {
+                Ok(response) => {
+                    if response.contains("\"ack\"") {
+                        println!("aliast: suggestions enabled");
+                    } else {
+                        eprintln!("aliast: unexpected response");
+                        std::process::exit(1);
+                    }
+                }
+                Err(err) => {
+                    eprintln!("{}", err);
+                    std::process::exit(1);
+                }
+            }
         }
         Commands::Off => {
-            eprintln!("aliast off: not yet implemented");
+            match send_ipc_request(r#"{"id":"off-1","type":"disable"}"#) {
+                Ok(response) => {
+                    if response.contains("\"ack\"") {
+                        println!("aliast: suggestions disabled");
+                    } else {
+                        eprintln!("aliast: unexpected response");
+                        std::process::exit(1);
+                    }
+                }
+                Err(err) => {
+                    eprintln!("{}", err);
+                    std::process::exit(1);
+                }
+            }
         }
         Commands::Doctor => {
             eprintln!("aliast doctor: not yet implemented");
