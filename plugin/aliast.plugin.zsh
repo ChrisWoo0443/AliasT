@@ -1,5 +1,5 @@
 # aliast.plugin.zsh -- Ghost text suggestions via a Rust daemon
-# Connects to aliast-daemon over a Unix socket, sends NDJSON requests on
+# Connects to aliast over a Unix socket, sends NDJSON requests on
 # keystrokes, and renders ghost text after the cursor with POSTDISPLAY.
 
 # ── 1. Guard and module loading ──────────────────────────────────────
@@ -43,7 +43,7 @@ _aliast_disconnect() {
 _aliast_reconnect() {
   _aliast_disconnect
   # Attempt daemon respawn (fire-and-forget)
-  command aliast-daemon start &>/dev/null &!
+  command aliast start &>/dev/null &!
 }
 
 # ── 4. Ghost text rendering ─────────────────────────────────────────

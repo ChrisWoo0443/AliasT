@@ -27,16 +27,16 @@ jobs:
           key: ${{ matrix.target }}
 
       - name: Build
-        run: cargo build --release -p aliast-daemon
+        run: cargo build --release -p aliast-daemon  # -p uses package name (not binary name)
 
       - name: Verify binary architecture
-        run: file target/release/aliast-daemon
+        run: file target/release/aliast
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: aliast-daemon-${{ matrix.target }}
-          path: target/release/aliast-daemon
+          name: aliast-${{ matrix.target }}
+          path: target/release/aliast
 
   release:
     needs: build
@@ -53,8 +53,8 @@ jobs:
           mkdir -p release
 
           for arch in aarch64-apple-darwin x86_64-apple-darwin; do
-            tar -czf "release/aliast-daemon-${arch}.tar.gz" \
-              -C "artifacts/aliast-daemon-${arch}" aliast-daemon
+            tar -czf "release/aliast-${arch}.tar.gz" \
+              -C "artifacts/aliast-${arch}" aliast
           done
 
           cp plugin/aliast.plugin.zsh release/
