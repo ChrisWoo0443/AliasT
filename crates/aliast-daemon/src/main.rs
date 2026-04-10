@@ -41,13 +41,10 @@ enum Commands {
     Stop,
     /// Check daemon status.
     Status,
-<<<<<<< HEAD
     /// Enable suggestions across all shells.
     On,
     /// Disable suggestions across all shells.
     Off,
-=======
->>>>>>> worktree-agent-ae351a8c
     /// Run diagnostic health checks.
     Doctor,
 }
