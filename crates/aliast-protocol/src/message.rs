@@ -62,6 +62,34 @@ pub enum Request {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         git_branch: Option<String>,
     },
+
+    /// Request a graceful daemon shutdown.
+    #[serde(rename = "shutdown")]
+    Shutdown {
+        /// Unique request identifier.
+        id: String,
+    },
+
+    /// Enable suggestion delivery across all connections.
+    #[serde(rename = "enable")]
+    Enable {
+        /// Unique request identifier.
+        id: String,
+    },
+
+    /// Disable suggestion delivery across all connections.
+    #[serde(rename = "disable")]
+    Disable {
+        /// Unique request identifier.
+        id: String,
+    },
+
+    /// Request current daemon status.
+    #[serde(rename = "get_status")]
+    GetStatus {
+        /// Unique request identifier.
+        id: String,
+    },
 }
 
 /// Responses sent from the daemon to the zsh plugin.
@@ -109,5 +137,23 @@ pub enum Response {
         id: String,
         /// The generated shell command text.
         text: String,
+    },
+
+    /// Acknowledgement that the daemon is shutting down.
+    #[serde(rename = "shutting_down")]
+    ShuttingDown {
+        /// Request identifier this response corresponds to.
+        id: String,
+    },
+
+    /// Current daemon status information.
+    #[serde(rename = "status")]
+    Status {
+        /// Request identifier this response corresponds to.
+        id: String,
+        /// Whether suggestions are currently enabled.
+        enabled: bool,
+        /// Daemon version string.
+        version: String,
     },
 }

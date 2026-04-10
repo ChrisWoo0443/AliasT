@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: AliasT + Homebrew Distribution
-status: verifying
-stopped_at: Completed 09-03-PLAN.md
-last_updated: "2026-04-10T17:09:56.779Z"
+milestone: v1.2
+milestone_name: CLI Polish & Reliability
+status: executing
+stopped_at: Completed 10-01-PLAN.md
+last_updated: "2026-04-10T18:59:54Z"
 last_activity: 2026-04-10
 progress:
   total_phases: 3
-  completed_phases: 2
-  total_plans: 5
+  completed_phases: 1
+  total_plans: 7
   completed_plans: 4
-  percent: 0
+  percent: 57
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-02)
 
 **Core value:** Type less, execute faster -- ghost text suggestions appear as you type and a hotkey lets you describe what you want in plain English.
-**Current focus:** Phase 08 — homebrew-tap-formula
+**Current focus:** Phase 10 — daemon-lifecycle
 
 ## Current Position
 
-Phase: 08 (homebrew-tap-formula) — EXECUTING
-Plan: 2 of 2
-Status: Phase complete — ready for verification
+Phase: 10 (daemon-lifecycle) — EXECUTING
+Plan: 1 of 3
+Status: Plan 01 complete, ready for Plan 02
 Last activity: 2026-04-10
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [######░░░░] 57%
 
 ## Performance Metrics
 
@@ -65,7 +65,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 06 P02 | 3min | 2 tasks | 2 files |
 | Phase 07 P01 | 4min | 2 tasks | 1 files |
 | Phase 08 P01 | 1min | 1 tasks | 2 files |
-| Phase 09 P03 | 1min | 1 tasks | 1 files |
+| Phase 10 P01 | 3min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -101,7 +101,8 @@ Recent decisions affecting current work:
 - [Phase 07]: Flat tarball structure so brew install extracts aliast-daemon directly at formula install time
 - [Phase 08]: Placeholder SHA256 values in formula — real values inserted after first release in Plan 02
 - [Phase 08]: Tap repo uses explicit elsif Hardware::CPU.intel? (not bare else) for fail-closed arch handling
-- [Phase 09]: SHA256 and version left unchanged in Homebrew formula; updated at v1.2.0 release time
+- [Phase 10]: DaemonState defined in lib.rs (not main.rs) so integration tests can import it
+- [Phase 10]: GetStatus dispatch returns real enabled state from AtomicBool; Shutdown/Enable/Disable are stubs for Plan 02
 
 ### Pending Todos
 
@@ -115,6 +116,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-10T17:09:56.777Z
-Stopped at: Completed 09-03-PLAN.md
+Last session: 2026-04-10T18:59:54Z
+Stopped at: Completed 10-01-PLAN.md
 Resume file: None

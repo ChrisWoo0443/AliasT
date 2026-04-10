@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
@@ -11,6 +12,7 @@ use aliast_core::ai::claude::ClaudeBackend;
 use aliast_core::ai::openai::OpenAiBackend;
 use aliast_core::ai::{AiBackend, ollama::OllamaBackend};
 use aliast_core::history::{parse_history_file, HistoryStore};
+use aliast_daemon::DaemonState;
 
 mod connection;
 mod lifecycle;
@@ -38,6 +40,12 @@ enum Commands {
     Stop,
     /// Check daemon status.
     Status,
+    /// Enable suggestions across all shells.
+    On,
+    /// Disable suggestions across all shells.
+    Off,
+    /// Run diagnostic health checks.
+    Doctor,
 }
 
 /// Initializes tracing with file-based logging.
@@ -187,8 +195,15 @@ async fn main() -> Result<()> {
             let cancel_token = CancellationToken::new();
             let server_token = cancel_token.clone();
 
+            let state = DaemonState {
+                store: shared_store,
+                ai_backend,
+                cancel_token: server_token,
+                enabled: Arc::new(AtomicBool::new(true)),
+            };
+
             let server_handle = tokio::spawn(async move {
-                server::run_server(&socket_path, server_token, shared_store, ai_backend).await
+                server::run_server(&socket_path, state).await
             });
 
             // Wait for shutdown signals
@@ -224,6 +239,15 @@ async fn main() -> Result<()> {
                     println!("aliast is not running");
                 }
             }
+        }
+        Commands::On => {
+            eprintln!("aliast on: not yet implemented");
+        }
+        Commands::Off => {
+            eprintln!("aliast off: not yet implemented");
+        }
+        Commands::Doctor => {
+            eprintln!("aliast doctor: not yet implemented");
         }
     }
 

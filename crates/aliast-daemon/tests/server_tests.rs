@@ -1,3 +1,4 @@
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -6,6 +7,7 @@ use tokio::time::{timeout, Duration};
 use tokio_util::sync::CancellationToken;
 
 use aliast_core::history::HistoryStore;
+use aliast_daemon::DaemonState;
 use aliast_daemon::server;
 
 /// Helper: start a server on a temp socket with a fresh HistoryStore,
@@ -19,12 +21,16 @@ async fn start_test_server() -> (std::path::PathBuf, CancellationToken, tempfile
     let store = HistoryStore::open(&db_path).unwrap();
     let shared_store = Arc::new(Mutex::new(store));
 
+    let state = DaemonState {
+        store: shared_store,
+        ai_backend: None,
+        cancel_token: cancel_token.clone(),
+        enabled: Arc::new(AtomicBool::new(true)),
+    };
+
     let server_path = socket_path.clone();
-    let server_token = cancel_token.clone();
     tokio::spawn(async move {
-        server::run_server(&server_path, server_token, shared_store, None)
-            .await
-            .unwrap();
+        server::run_server(&server_path, state).await.unwrap();
     });
 
     // Wait briefly for the server to start listening
