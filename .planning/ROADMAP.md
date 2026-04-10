@@ -51,7 +51,7 @@
 
 Plans:
 - [ ] 09-01-PLAN.md — Workspace version unification (version 1.2.0 + test assertion updates)
-- [ ] 09-02-PLAN.md — Binary rename to `aliast` (Cargo [[bin]] + source/plugin/CI/docs updates)
+- [x] 09-02-PLAN.md — Binary rename to `aliast` (Cargo [[bin]] + source/plugin/CI/docs updates)
 - [ ] 09-03-PLAN.md — Homebrew formula update for `aliast` binary name
 
 ### Phase 10: Daemon Lifecycle
@@ -99,6 +99,6 @@ Phases execute in numeric order: 9 -> 10 -> 11
 | 6. Project Rename | v1.1 | 2/2 | Complete | 2026-04-03 |
 | 7. CI/CD Release Pipeline | v1.1 | 1/1 | Complete | 2026-04-09 |
 | 8. Homebrew Tap + Formula | v1.1 | 2/2 | Complete | 2026-04-10 |
-| 9. Binary Rename + Version Foundations | v1.2 | 1/3 | Executing | - |
+| 9. Binary Rename + Version Foundations | v1.2 | 2/3 | Executing | - |
 | 10. Daemon Lifecycle | v1.2 | 0/? | Not started | - |
 | 11. CLI UX + NL Indicator | v1.2 | 0/? | Not started | - |

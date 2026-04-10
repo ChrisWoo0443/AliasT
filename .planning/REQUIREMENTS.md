@@ -16,7 +16,7 @@ Requirements for CLI polish & reliability milestone. Each maps to roadmap phases
 
 ### Binary & Version
 
-- [ ] **BIN-01**: Binary is named `aliast` (not `aliast-daemon`)
+- [x] **BIN-01**: Binary is named `aliast` (not `aliast-daemon`)
 - [ ] **BIN-02**: All workspace crates use `version.workspace = true` from root Cargo.toml
 - [ ] **BIN-03**: Test assertions use `env!("CARGO_PKG_VERSION")` instead of hardcoded `"0.1.0"`
 
@@ -61,7 +61,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BIN-01 | Phase 9 | Pending |
+| BIN-01 | Phase 9 | Complete |
 | BIN-02 | Phase 9 | Pending |
 | BIN-03 | Phase 9 | Pending |
 | LIFE-01 | Phase 10 | Pending |
