@@ -217,11 +217,22 @@ async fn main() -> Result<()> {
             let cancel_token = CancellationToken::new();
             let server_token = cancel_token.clone();
 
+            let (derived_backend_name, derived_model_name) = match &ai_backend {
+                Some(b) => {
+                    let name = b.name().to_string();
+                    let model = std::env::var("ALIAST_NL_MODEL").unwrap_or_default();
+                    (name, model)
+                }
+                None => ("none".to_string(), String::new()),
+            };
+
             let state = DaemonState {
                 store: shared_store,
                 ai_backend,
                 cancel_token: server_token,
                 enabled: Arc::new(AtomicBool::new(true)),
+                backend_name: derived_backend_name,
+                model_name: derived_model_name,
             };
 
             let server_handle = tokio::spawn(async move {
@@ -272,9 +283,16 @@ async fn main() -> Result<()> {
                         if parsed["type"] == "status" {
                             let enabled = parsed["enabled"].as_bool().unwrap_or(true);
                             let version = parsed["version"].as_str().unwrap_or("unknown");
+                            let backend = parsed["backend"].as_str().unwrap_or("unknown");
+                            let model = parsed["model"].as_str().unwrap_or("");
                             let status_label = if enabled { "enabled" } else { "disabled" };
                             println!("aliast v{} is running ({})", version, status_label);
                             println!("  socket: {}", socket_path.display());
+                            if backend != "none" && !model.is_empty() {
+                                println!("  ai: {} ({})", backend, model);
+                            } else {
+                                println!("  ai: not configured");
+                            }
                         } else {
                             println!("aliast is running (socket: {})", socket_path.display());
                         }

@@ -26,6 +26,8 @@ async fn start_test_server() -> (std::path::PathBuf, CancellationToken, tempfile
         ai_backend: None,
         cancel_token: cancel_token.clone(),
         enabled: Arc::new(AtomicBool::new(true)),
+        backend_name: "none".to_string(),
+        model_name: String::new(),
     };
 
     let server_path = socket_path.clone();

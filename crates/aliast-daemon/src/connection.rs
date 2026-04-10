@@ -220,6 +220,8 @@ async fn dispatch_request(request: Request, state: &DaemonState) -> Response {
                 id,
                 enabled,
                 version: env!("CARGO_PKG_VERSION").to_string(),
+                backend: state.backend_name.clone(),
+                model: state.model_name.clone(),
             }
         }
     }

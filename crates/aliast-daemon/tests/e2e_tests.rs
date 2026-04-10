@@ -71,6 +71,8 @@ async fn spawn_daemon() -> (std::path::PathBuf, CancellationToken, tempfile::Tem
         ai_backend: None,
         cancel_token: cancel_token.clone(),
         enabled: Arc::new(AtomicBool::new(true)),
+        backend_name: "none".to_string(),
+        model_name: String::new(),
     };
 
     let server_path = socket_path.clone();
@@ -97,11 +99,14 @@ async fn spawn_daemon_with_ai(
     let store = HistoryStore::open(&db_path).unwrap();
     let shared_store = Arc::new(Mutex::new(store));
 
+    let backend_name = backend.name().to_string();
     let state = DaemonState {
         store: shared_store,
         ai_backend: Some(backend),
         cancel_token: cancel_token.clone(),
         enabled: Arc::new(AtomicBool::new(true)),
+        backend_name,
+        model_name: "test-model".to_string(),
     };
 
     let server_path = socket_path.clone();
@@ -710,6 +715,62 @@ async fn test_disabled_record_still_works() {
                 assert_eq!(id, "rec1");
             }
             other => panic!("expected Ack, got {:?}", other),
+        }
+    })
+    .await;
+
+    cancel_token.cancel();
+    assert!(result.is_ok(), "test timed out");
+}
+
+// --- Status backend info E2E tests ---
+
+#[tokio::test]
+async fn test_get_status_includes_backend_info() {
+    let mock_backend = Arc::new(MockAiBackend::new("unused"));
+    let (socket_path, cancel_token, _temp_dir) =
+        spawn_daemon_with_ai(mock_backend).await;
+
+    let result = timeout(Duration::from_secs(5), async {
+        let mut stream = UnixStream::connect(&socket_path).await.unwrap();
+        let response = send_ndjson(
+            &mut stream,
+            r#"{"type":"get_status","id":"gs1"}"#,
+        )
+        .await;
+        match response {
+            Response::Status { id, backend, model, .. } => {
+                assert_eq!(id, "gs1");
+                assert_eq!(backend, "mock");
+                assert_eq!(model, "test-model");
+            }
+            other => panic!("expected Status, got {:?}", other),
+        }
+    })
+    .await;
+
+    cancel_token.cancel();
+    assert!(result.is_ok(), "test timed out");
+}
+
+#[tokio::test]
+async fn test_get_status_no_backend() {
+    let (socket_path, cancel_token, _temp_dir) = spawn_daemon().await;
+
+    let result = timeout(Duration::from_secs(5), async {
+        let mut stream = UnixStream::connect(&socket_path).await.unwrap();
+        let response = send_ndjson(
+            &mut stream,
+            r#"{"type":"get_status","id":"gs1"}"#,
+        )
+        .await;
+        match response {
+            Response::Status { id, backend, model, .. } => {
+                assert_eq!(id, "gs1");
+                assert_eq!(backend, "none");
+                assert_eq!(model, "");
+            }
+            other => panic!("expected Status, got {:?}", other),
         }
     })
     .await;
