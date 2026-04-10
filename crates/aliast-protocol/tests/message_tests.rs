@@ -428,11 +428,15 @@ fn serialize_status_response() {
         id: "gs1".to_string(),
         enabled: true,
         version: env!("CARGO_PKG_VERSION").to_string(),
+        backend: "ollama".to_string(),
+        model: "llama3".to_string(),
     };
     let json = serde_json::to_string(&response).unwrap();
     assert!(json.contains(r#""type":"status""#));
     assert!(json.contains(r#""enabled":true"#));
     assert!(json.contains(r#""id":"gs1""#));
+    assert!(json.contains(r#""backend":"ollama""#));
+    assert!(json.contains(r#""model":"llama3""#));
 }
 
 #[test]
@@ -441,10 +445,28 @@ fn roundtrip_status_response() {
         id: "gs1".to_string(),
         enabled: true,
         version: env!("CARGO_PKG_VERSION").to_string(),
+        backend: "ollama".to_string(),
+        model: "llama3".to_string(),
     };
     let json = serde_json::to_string(&response).unwrap();
     let deserialized: Response = serde_json::from_str(&json).unwrap();
     assert_eq!(deserialized, response);
+}
+
+#[test]
+fn serialize_status_response_no_backend() {
+    let response = Response::Status {
+        id: "gs1".to_string(),
+        enabled: true,
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        backend: "none".to_string(),
+        model: String::new(),
+    };
+    let json = serde_json::to_string(&response).unwrap();
+    let deserialized: Response = serde_json::from_str(&json).unwrap();
+    assert_eq!(deserialized, response);
+    assert!(json.contains(r#""backend":"none""#));
+    assert!(json.contains(r#""model":"""#));
 }
 
 #[test]

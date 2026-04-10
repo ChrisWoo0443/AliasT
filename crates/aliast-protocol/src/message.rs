@@ -155,5 +155,9 @@ pub enum Response {
         enabled: bool,
         /// Daemon version string.
         version: String,
+        /// Configured AI backend name ("ollama", "claude", "openai", or "none").
+        backend: String,
+        /// Configured AI model name (empty string when no backend configured).
+        model: String,
     },
 }

@@ -18,4 +18,6 @@ pub struct DaemonState {
     pub ai_backend: Option<Arc<dyn AiBackend>>,
     pub cancel_token: CancellationToken,
     pub enabled: Arc<AtomicBool>,
+    pub backend_name: String,
+    pub model_name: String,
 }
