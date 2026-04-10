@@ -29,9 +29,32 @@ _aliast_connect() {
   # Already connected
   [[ -n "$_ALIAST_FD" ]] && return 0
 
-  zsocket "$_ALIAST_SOCKET_PATH" 2>/dev/null || return 1
-  _ALIAST_FD=$REPLY
-  return 0
+  # Try connecting to existing daemon
+  zsocket "$_ALIAST_SOCKET_PATH" 2>/dev/null && {
+    _ALIAST_FD=$REPLY
+    return 0
+  }
+
+  # Daemon not running -- check if aliast binary is on PATH (avoids 500ms delay when missing)
+  (( $+commands[aliast] )) || return 1
+
+  # Spawn daemon (fire-and-forget)
+  command aliast start &>/dev/null &!
+
+  # Poll for socket readiness (50ms intervals, 10 attempts = 500ms max)
+  local attempt=0
+  while (( attempt < 10 )); do
+    (( attempt++ ))
+    sleep 0.05
+    [[ -S "$_ALIAST_SOCKET_PATH" ]] || continue
+    zsocket "$_ALIAST_SOCKET_PATH" 2>/dev/null && {
+      _ALIAST_FD=$REPLY
+      return 0
+    }
+  done
+
+  # Daemon did not start in time -- silent failure
+  return 1
 }
 
 _aliast_disconnect() {
@@ -42,8 +65,7 @@ _aliast_disconnect() {
 
 _aliast_reconnect() {
   _aliast_disconnect
-  # Attempt daemon respawn (fire-and-forget)
-  command aliast-daemon start &>/dev/null &!
+  _aliast_connect
 }
 
 # ── 4. Ghost text rendering ─────────────────────────────────────────
