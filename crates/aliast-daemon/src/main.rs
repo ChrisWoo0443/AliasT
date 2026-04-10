@@ -19,7 +19,7 @@ mod server;
 
 /// AliasT suggestion daemon -- serves ghost-text completions over a Unix socket.
 #[derive(Parser)]
-#[command(name = "aliast-daemon", version, about = "AliasT suggestion daemon")]
+#[command(name = "aliast", version, about = "AliasT suggestion daemon")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -212,16 +212,16 @@ async fn main() -> Result<()> {
             tracing::info!("Daemon stopped cleanly");
         }
         Commands::Stop => {
-            eprintln!("aliast-daemon stop: not yet implemented");
+            eprintln!("aliast stop: not yet implemented");
         }
         Commands::Status => {
             let socket_path = lifecycle::default_socket_path();
             match std::os::unix::net::UnixStream::connect(&socket_path) {
                 Ok(_) => {
-                    println!("aliast-daemon is running (socket: {})", socket_path.display());
+                    println!("aliast is running (socket: {})", socket_path.display());
                 }
                 Err(_) => {
-                    println!("aliast-daemon is not running");
+                    println!("aliast is not running");
                 }
             }
         }

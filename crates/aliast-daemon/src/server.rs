@@ -26,7 +26,7 @@ pub async fn run_server(
 
     let listener = UnixListener::bind(socket_path)?;
     tracing::info!("Listening on {:?}", socket_path);
-    eprintln!("aliast-daemon: listening on {}", socket_path.display());
+    eprintln!("aliast: listening on {}", socket_path.display());
 
     loop {
         tokio::select! {

@@ -3,6 +3,10 @@ name = "aliast-daemon"
 version.workspace = true
 edition = "2024"
 
+[[bin]]
+name = "aliast"
+path = "src/main.rs"
+
 [dependencies]
 aliast-protocol = { path = "../aliast-protocol" }
 aliast-core = { path = "../aliast-core" }
