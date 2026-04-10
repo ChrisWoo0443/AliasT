@@ -75,7 +75,7 @@ async fn server_responds_to_ping_with_pong() {
         let parsed: serde_json::Value = serde_json::from_str(&response).unwrap();
         assert_eq!(parsed["type"], "pong");
         assert_eq!(parsed["id"], "p1");
-        assert_eq!(parsed["v"], "0.1.0");
+        assert_eq!(parsed["v"], env!("CARGO_PKG_VERSION"));
     })
     .await;
 

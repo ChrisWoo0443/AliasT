@@ -35,12 +35,14 @@ fn serialize_suggestion_response() {
 
 #[test]
 fn serialize_pong_response() {
+    let version = env!("CARGO_PKG_VERSION");
     let response = Response::Pong {
         id: "r0".to_string(),
-        v: "0.1.0".to_string(),
+        v: version.to_string(),
     };
     let json = serde_json::to_string(&response).unwrap();
-    assert_eq!(json, r#"{"type":"pong","id":"r0","v":"0.1.0"}"#);
+    let expected = format!(r#"{{"type":"pong","id":"r0","v":"{}"}}"#, version);
+    assert_eq!(json, expected);
 }
 
 #[test]

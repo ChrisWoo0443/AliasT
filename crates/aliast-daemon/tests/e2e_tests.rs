@@ -228,7 +228,7 @@ async fn test_ping_returns_pong() {
         match response {
             Response::Pong { id, v } => {
                 assert_eq!(id, "r0");
-                assert_eq!(v, "0.1.0");
+                assert_eq!(v, env!("CARGO_PKG_VERSION"));
             }
             other => panic!("expected Pong, got {:?}", other),
         }
