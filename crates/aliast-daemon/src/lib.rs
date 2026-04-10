@@ -6,6 +6,7 @@ use aliast_core::history::HistoryStore;
 use tokio_util::sync::CancellationToken;
 
 pub mod connection;
+pub mod doctor;
 pub mod lifecycle;
 pub mod migration;
 pub mod server;

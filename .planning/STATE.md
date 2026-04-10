@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: CLI Polish & Reliability
-status: executing
-stopped_at: Completed 10-02-PLAN.md
-last_updated: "2026-04-10T19:09:34.340Z"
+milestone: v1.1
+milestone_name: AliasT + Homebrew Distribution
+status: verifying
+stopped_at: Completed 10-03-PLAN.md
+last_updated: "2026-04-10T19:16:56.054Z"
 last_activity: 2026-04-10
 progress:
   total_phases: 3
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 5
+  completed_phases: 2
+  total_plans: 5
+  completed_plans: 4
   percent: 0
 ---
 
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-02)
 
 **Core value:** Type less, execute faster -- ghost text suggestions appear as you type and a hotkey lets you describe what you want in plain English.
-**Current focus:** Phase 10 — daemon-lifecycle
+**Current focus:** Phase 08 — homebrew-tap-formula
 
 ## Current Position
 
-Phase: 10 (daemon-lifecycle) — EXECUTING
-Plan: 2 of 3
-Status: Ready to execute
+Phase: 08 (homebrew-tap-formula) — EXECUTING
+Plan: 2 of 2
+Status: Phase complete — ready for verification
 Last activity: 2026-04-10
 
 Progress: [░░░░░░░░░░] 0%
@@ -65,8 +65,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 06 P02 | 3min | 2 tasks | 2 files |
 | Phase 07 P01 | 4min | 2 tasks | 1 files |
 | Phase 08 P01 | 1min | 1 tasks | 2 files |
-| Phase 09 P03 | 1min | 1 tasks | 1 files |
-| Phase 10 P02 | 4min | 2 tasks | 3 files |
+| Phase 10 P03 | 4min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -102,9 +101,7 @@ Recent decisions affecting current work:
 - [Phase 07]: Flat tarball structure so brew install extracts aliast-daemon directly at formula install time
 - [Phase 08]: Placeholder SHA256 values in formula — real values inserted after first release in Plan 02
 - [Phase 08]: Tap repo uses explicit elsif Hardware::CPU.intel? (not bare else) for fail-closed arch handling
-- [Phase 09]: SHA256 and version left unchanged in Homebrew formula; updated at v1.2.0 release time
-- [Phase 10]: Shutdown handled inline in handle_connection to guarantee response before cancel
-- [Phase 10]: send_ipc_request sync helper with 5s timeout for CLI subcommands
+- [Phase 10]: Added check_daemon_running_at() testable variant for deterministic test isolation from live daemon state
 
 ### Pending Todos
 
@@ -118,6 +115,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-10T19:09:34.337Z
-Stopped at: Completed 10-02-PLAN.md
+Last session: 2026-04-10T19:16:56.052Z
+Stopped at: Completed 10-03-PLAN.md
 Resume file: None

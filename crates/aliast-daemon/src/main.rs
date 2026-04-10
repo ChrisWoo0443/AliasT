@@ -15,6 +15,7 @@ use aliast_core::history::{parse_history_file, HistoryStore};
 use aliast_daemon::DaemonState;
 
 mod connection;
+mod doctor;
 mod lifecycle;
 pub mod migration;
 mod server;
@@ -40,10 +41,13 @@ enum Commands {
     Stop,
     /// Check daemon status.
     Status,
+<<<<<<< HEAD
     /// Enable suggestions across all shells.
     On,
     /// Disable suggestions across all shells.
     Off,
+=======
+>>>>>>> worktree-agent-ae351a8c
     /// Run diagnostic health checks.
     Doctor,
 }
@@ -320,7 +324,12 @@ async fn main() -> Result<()> {
             }
         }
         Commands::Doctor => {
-            eprintln!("aliast doctor: not yet implemented");
+            let checks = doctor::run_doctor_checks().await;
+            doctor::print_doctor_report(&checks);
+            let has_failures = checks.iter().any(|c| !c.passed);
+            if has_failures {
+                std::process::exit(1);
+            }
         }
     }
 
