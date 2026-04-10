@@ -13,6 +13,7 @@ use aliast_core::ai::{AiBackend, ollama::OllamaBackend};
 use aliast_core::history::{parse_history_file, HistoryStore};
 
 mod connection;
+mod doctor;
 mod lifecycle;
 pub mod migration;
 mod server;
@@ -38,6 +39,8 @@ enum Commands {
     Stop,
     /// Check daemon status.
     Status,
+    /// Run diagnostic health checks.
+    Doctor,
 }
 
 /// Initializes tracing with file-based logging.
@@ -223,6 +226,14 @@ async fn main() -> Result<()> {
                 Err(_) => {
                     println!("aliast-daemon is not running");
                 }
+            }
+        }
+        Commands::Doctor => {
+            let checks = doctor::run_doctor_checks().await;
+            doctor::print_doctor_report(&checks);
+            let has_failures = checks.iter().any(|c| !c.passed);
+            if has_failures {
+                std::process::exit(1);
             }
         }
     }
