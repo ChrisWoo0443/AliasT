@@ -20,9 +20,40 @@ mod lifecycle;
 pub mod migration;
 mod server;
 
+const LONG_HELP: &str = "\
+AI Setup:
+  AliasT uses a local or cloud AI backend for natural-language mode (Ctrl+Space).
+
+  Environment Variables:
+    ALIAST_NL_MODEL      Model name (e.g. llama3.2, claude-sonnet-4-20250514)
+    ALIAST_NL_BACKEND    Backend: ollama (default), claude, openai
+    ALIAST_ANTHROPIC_KEY API key for Claude backend
+    ALIAST_OPENAI_KEY    API key for OpenAI backend
+
+  Quick Start (Ollama -- free, local):
+    1. Install Ollama: brew install ollama && ollama serve
+    2. Pull a model: ollama pull llama3.2
+    3. Export in .zshrc:
+         export ALIAST_NL_MODEL=llama3.2
+
+  Quick Start (Claude):
+    1. Get an API key from console.anthropic.com
+    2. Export in .zshrc:
+         export ALIAST_NL_BACKEND=claude
+         export ALIAST_NL_MODEL=claude-sonnet-4-20250514
+         export ALIAST_ANTHROPIC_KEY=sk-ant-...
+
+  Run `aliast doctor` for setup diagnostics.";
+
 /// AliasT suggestion daemon -- serves ghost-text completions over a Unix socket.
 #[derive(Parser)]
-#[command(name = "aliast", version, about = "AliasT suggestion daemon")]
+#[command(
+    name = "aliast",
+    version,
+    about = "AliasT suggestion daemon",
+    after_help = "Run `aliast doctor` for setup diagnostics.",
+    after_long_help = LONG_HELP,
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
