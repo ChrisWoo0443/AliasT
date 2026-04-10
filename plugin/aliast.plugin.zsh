@@ -223,9 +223,15 @@ add-zle-hook-widget zle-line-pre-redraw _aliast_line_pre_redraw
 
 # ── 9. NL Mode: Natural Language to Command ────────────────────────
 
+_aliast_nl_set_indicator() {
+  PREDISPLAY="● "
+  region_highlight+=("P0 1 fg=blue,bold memo=aliast-nl")
+}
+
 _aliast_nl_deactivate() {
   _ALIAST_NL_STATE="inactive"
   _ALIAST_NL_PROMPT=""
+  region_highlight=("${(@)region_highlight:#* memo=aliast-nl}")
   PREDISPLAY=""
   BUFFER=""
   CURSOR=0
@@ -302,7 +308,7 @@ _aliast_nl_generate() {
       rm -f "$tmpfile"
       # Back to NL input
       _ALIAST_NL_STATE="input"
-      PREDISPLAY="[NL] "
+      _aliast_nl_set_indicator
       BUFFER=""
       CURSOR=0
       zle -R
@@ -320,7 +326,7 @@ _aliast_nl_generate() {
   # Handle error responses
   if [[ "$result" == error:* ]]; then
     local error_type="${result#error:}"
-    PREDISPLAY="[NL] "
+    _aliast_nl_set_indicator
     case "$error_type" in
       connect)
         BUFFER="# Error: cannot connect to daemon"
@@ -343,7 +349,7 @@ _aliast_nl_generate() {
     command_text="${command_text//\\n/$'\n'}"
     command_text="${command_text//\\\\/\\}"
     command_text="${command_text//\\\"/\"}"
-    PREDISPLAY="[NL] "
+    _aliast_nl_set_indicator
     BUFFER="$command_text"
     CURSOR=$#BUFFER
     _ALIAST_NL_STATE="review"
@@ -351,13 +357,13 @@ _aliast_nl_generate() {
   elif [[ "$result" == *'"type":"error"'* ]]; then
     local error_msg="${result##*\"msg\":\"}"
     error_msg="${error_msg%%\"*}"
-    PREDISPLAY="[NL] "
+    _aliast_nl_set_indicator
     BUFFER="# ${error_msg}"
     CURSOR=$#BUFFER
     _ALIAST_NL_STATE="review"
     zle -R
   else
-    PREDISPLAY="[NL] "
+    _aliast_nl_set_indicator
     BUFFER="# Error: unexpected response"
     _ALIAST_NL_STATE="review"
     CURSOR=$#BUFFER
@@ -370,7 +376,7 @@ _aliast_nl_toggle() {
     # Toggle ON — enter NL mode
     _ALIAST_NL_STATE="input"
     _aliast_clear_ghost
-    PREDISPLAY="[NL] "
+    _aliast_nl_set_indicator
     BUFFER=""
     CURSOR=0
     zle -R
@@ -388,7 +394,8 @@ _aliast_nl_escape() {
     _ALIAST_NL_STATE="input"
     BUFFER=""
     CURSOR=0
-    PREDISPLAY="[NL] "
+    region_highlight=("${(@)region_highlight:#* memo=aliast-nl}")
+    _aliast_nl_set_indicator
     zle -R
   elif [[ "$_ALIAST_NL_STATE" != "inactive" ]]; then
     # Escape in input → exit NL mode
@@ -454,10 +461,11 @@ _aliast_nl_precmd() {
 }
 add-zsh-hook precmd _aliast_nl_precmd
 
-# Re-apply [NL] prefix when ZLE starts a new line (after precmd)
+# Re-apply NL indicator when ZLE starts a new line (after precmd)
 _aliast_nl_line_init() {
   if [[ "$_ALIAST_NL_STATE" == "input" ]]; then
-    PREDISPLAY="[NL] "
+    region_highlight=("${(@)region_highlight:#* memo=aliast-nl}")
+    _aliast_nl_set_indicator
   fi
 }
 add-zle-hook-widget zle-line-init _aliast_nl_line_init
