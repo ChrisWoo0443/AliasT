@@ -323,6 +323,128 @@ fn generate_with_full_context() {
     );
 }
 
+// --- Lifecycle protocol message tests ---
+
+#[test]
+fn serialize_shutdown_request() {
+    let request = Request::Shutdown {
+        id: "s1".to_string(),
+    };
+    let json = serde_json::to_string(&request).unwrap();
+    assert_eq!(json, r#"{"type":"shutdown","id":"s1"}"#);
+}
+
+#[test]
+fn roundtrip_shutdown_request() {
+    let request = Request::Shutdown {
+        id: "s1".to_string(),
+    };
+    let json = serde_json::to_string(&request).unwrap();
+    let deserialized: Request = serde_json::from_str(&json).unwrap();
+    assert_eq!(deserialized, request);
+}
+
+#[test]
+fn serialize_enable_request() {
+    let request = Request::Enable {
+        id: "e1".to_string(),
+    };
+    let json = serde_json::to_string(&request).unwrap();
+    assert_eq!(json, r#"{"type":"enable","id":"e1"}"#);
+}
+
+#[test]
+fn roundtrip_enable_request() {
+    let request = Request::Enable {
+        id: "e1".to_string(),
+    };
+    let json = serde_json::to_string(&request).unwrap();
+    let deserialized: Request = serde_json::from_str(&json).unwrap();
+    assert_eq!(deserialized, request);
+}
+
+#[test]
+fn serialize_disable_request() {
+    let request = Request::Disable {
+        id: "d1".to_string(),
+    };
+    let json = serde_json::to_string(&request).unwrap();
+    assert_eq!(json, r#"{"type":"disable","id":"d1"}"#);
+}
+
+#[test]
+fn roundtrip_disable_request() {
+    let request = Request::Disable {
+        id: "d1".to_string(),
+    };
+    let json = serde_json::to_string(&request).unwrap();
+    let deserialized: Request = serde_json::from_str(&json).unwrap();
+    assert_eq!(deserialized, request);
+}
+
+#[test]
+fn serialize_get_status_request() {
+    let request = Request::GetStatus {
+        id: "gs1".to_string(),
+    };
+    let json = serde_json::to_string(&request).unwrap();
+    assert_eq!(json, r#"{"type":"get_status","id":"gs1"}"#);
+}
+
+#[test]
+fn roundtrip_get_status_request() {
+    let request = Request::GetStatus {
+        id: "gs1".to_string(),
+    };
+    let json = serde_json::to_string(&request).unwrap();
+    let deserialized: Request = serde_json::from_str(&json).unwrap();
+    assert_eq!(deserialized, request);
+}
+
+#[test]
+fn serialize_shutting_down_response() {
+    let response = Response::ShuttingDown {
+        id: "s1".to_string(),
+    };
+    let json = serde_json::to_string(&response).unwrap();
+    assert_eq!(json, r#"{"type":"shutting_down","id":"s1"}"#);
+}
+
+#[test]
+fn roundtrip_shutting_down_response() {
+    let response = Response::ShuttingDown {
+        id: "s1".to_string(),
+    };
+    let json = serde_json::to_string(&response).unwrap();
+    let deserialized: Response = serde_json::from_str(&json).unwrap();
+    assert_eq!(deserialized, response);
+}
+
+#[test]
+fn serialize_status_response() {
+    let response = Response::Status {
+        id: "gs1".to_string(),
+        enabled: true,
+        version: env!("CARGO_PKG_VERSION").to_string(),
+    };
+    let json = serde_json::to_string(&response).unwrap();
+    assert!(json.contains(r#""type":"status""#));
+    assert!(json.contains(r#""enabled":true"#));
+    assert!(json.contains(r#""id":"gs1""#));
+}
+
+#[test]
+fn roundtrip_status_response() {
+    let response = Response::Status {
+        id: "gs1".to_string(),
+        enabled: true,
+        version: env!("CARGO_PKG_VERSION").to_string(),
+    };
+    let json = serde_json::to_string(&response).unwrap();
+    let deserialized: Response = serde_json::from_str(&json).unwrap();
+    assert_eq!(deserialized, response);
+}
+
 #[test]
 fn complete_none_context_omitted_from_json() {
     let request = Request::Complete {
