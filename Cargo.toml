@@ -1,3 +1,6 @@
 [workspace]
 resolver = "2"
 members = ["crates/aliast-daemon", "crates/aliast-protocol", "crates/aliast-core"]
+
+[workspace.package]
+version = "1.2.0"
