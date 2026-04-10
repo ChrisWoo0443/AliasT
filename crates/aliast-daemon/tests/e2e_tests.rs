@@ -508,3 +508,212 @@ async fn test_generate_with_context_enriches_prompt() {
     cancel_token.cancel();
     assert!(result.is_ok(), "test timed out");
 }
+
+// --- Lifecycle control E2E tests ---
+
+#[tokio::test]
+async fn test_shutdown_via_protocol() {
+    let (socket_path, _cancel_token, _temp_dir) = spawn_daemon().await;
+
+    let result = timeout(Duration::from_secs(5), async {
+        let mut stream = UnixStream::connect(&socket_path).await.unwrap();
+
+        // Send shutdown request
+        let response = send_ndjson(
+            &mut stream,
+            r#"{"type":"shutdown","id":"s1"}"#,
+        )
+        .await;
+
+        match response {
+            Response::ShuttingDown { id } => {
+                assert_eq!(id, "s1");
+            }
+            other => panic!("expected ShuttingDown, got {:?}", other),
+        }
+
+        // Wait briefly for daemon to shut down
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        // Verify daemon is no longer reachable
+        let connect_result = UnixStream::connect(&socket_path).await;
+        assert!(connect_result.is_err(), "daemon should be unreachable after shutdown");
+    })
+    .await;
+
+    assert!(result.is_ok(), "test timed out");
+}
+
+#[tokio::test]
+async fn test_enable_disable_toggle() {
+    let (socket_path, cancel_token, _temp_dir) = spawn_daemon().await;
+
+    let result = timeout(Duration::from_secs(5), async {
+        let mut stream = UnixStream::connect(&socket_path).await.unwrap();
+
+        // Send Disable
+        let response = send_ndjson(
+            &mut stream,
+            r#"{"type":"disable","id":"d1"}"#,
+        )
+        .await;
+        assert_eq!(response, Response::Ack { id: "d1".to_string() });
+
+        // Check status -- should be disabled
+        let response = send_ndjson(
+            &mut stream,
+            r#"{"type":"get_status","id":"gs1"}"#,
+        )
+        .await;
+        match &response {
+            Response::Status { id, enabled, .. } => {
+                assert_eq!(id, "gs1");
+                assert!(!enabled, "should be disabled after disable command");
+            }
+            other => panic!("expected Status, got {:?}", other),
+        }
+
+        // Send Enable
+        let response = send_ndjson(
+            &mut stream,
+            r#"{"type":"enable","id":"e1"}"#,
+        )
+        .await;
+        assert_eq!(response, Response::Ack { id: "e1".to_string() });
+
+        // Check status -- should be enabled again
+        let response = send_ndjson(
+            &mut stream,
+            r#"{"type":"get_status","id":"gs2"}"#,
+        )
+        .await;
+        match &response {
+            Response::Status { id, enabled, .. } => {
+                assert_eq!(id, "gs2");
+                assert!(enabled, "should be enabled after enable command");
+            }
+            other => panic!("expected Status, got {:?}", other),
+        }
+    })
+    .await;
+
+    cancel_token.cancel();
+    assert!(result.is_ok(), "test timed out");
+}
+
+#[tokio::test]
+async fn test_disabled_complete_returns_empty() {
+    let (socket_path, cancel_token, _temp_dir) = spawn_daemon().await;
+
+    let result = timeout(Duration::from_secs(5), async {
+        let mut stream = UnixStream::connect(&socket_path).await.unwrap();
+
+        // Record a command so the store has data
+        let response = send_ndjson(
+            &mut stream,
+            r#"{"id":"rec1","type":"record","cmd":"git checkout main","cwd":"/home"}"#,
+        )
+        .await;
+        assert_eq!(response, Response::Ack { id: "rec1".to_string() });
+
+        // Disable suggestions
+        let response = send_ndjson(
+            &mut stream,
+            r#"{"type":"disable","id":"d1"}"#,
+        )
+        .await;
+        assert_eq!(response, Response::Ack { id: "d1".to_string() });
+
+        // Complete request should return empty suggestion
+        let response = send_ndjson(
+            &mut stream,
+            r#"{"id":"c1","type":"complete","buf":"git ch","cur":6}"#,
+        )
+        .await;
+        match response {
+            Response::Suggestion { id, text } => {
+                assert_eq!(id, "c1");
+                assert_eq!(text, "", "disabled daemon should return empty suggestion");
+            }
+            other => panic!("expected empty Suggestion, got {:?}", other),
+        }
+    })
+    .await;
+
+    cancel_token.cancel();
+    assert!(result.is_ok(), "test timed out");
+}
+
+#[tokio::test]
+async fn test_disabled_generate_returns_error() {
+    let mock_backend = Arc::new(MockAiBackend::new("ls -la"));
+    let (socket_path, cancel_token, _temp_dir) = spawn_daemon_with_ai(mock_backend).await;
+
+    let result = timeout(Duration::from_secs(5), async {
+        let mut stream = UnixStream::connect(&socket_path).await.unwrap();
+
+        // Disable suggestions
+        let response = send_ndjson(
+            &mut stream,
+            r#"{"type":"disable","id":"d1"}"#,
+        )
+        .await;
+        assert_eq!(response, Response::Ack { id: "d1".to_string() });
+
+        // Generate request should return error about being paused
+        let response = send_ndjson(
+            &mut stream,
+            r#"{"type":"generate","id":"g1","prompt":"list files"}"#,
+        )
+        .await;
+        match response {
+            Response::Error { id, msg } => {
+                assert_eq!(id, "g1");
+                assert!(
+                    msg.contains("paused"),
+                    "expected paused error, got: {}",
+                    msg
+                );
+            }
+            other => panic!("expected Error response, got: {:?}", other),
+        }
+    })
+    .await;
+
+    cancel_token.cancel();
+    assert!(result.is_ok(), "test timed out");
+}
+
+#[tokio::test]
+async fn test_disabled_record_still_works() {
+    let (socket_path, cancel_token, _temp_dir) = spawn_daemon().await;
+
+    let result = timeout(Duration::from_secs(5), async {
+        let mut stream = UnixStream::connect(&socket_path).await.unwrap();
+
+        // Disable suggestions
+        let response = send_ndjson(
+            &mut stream,
+            r#"{"type":"disable","id":"d1"}"#,
+        )
+        .await;
+        assert_eq!(response, Response::Ack { id: "d1".to_string() });
+
+        // Record should still work when disabled (per D-05)
+        let response = send_ndjson(
+            &mut stream,
+            r#"{"id":"rec1","type":"record","cmd":"ls -la","cwd":"/tmp"}"#,
+        )
+        .await;
+        match response {
+            Response::Ack { id } => {
+                assert_eq!(id, "rec1");
+            }
+            other => panic!("expected Ack, got {:?}", other),
+        }
+    })
+    .await;
+
+    cancel_token.cancel();
+    assert!(result.is_ok(), "test timed out");
+}
