@@ -164,6 +164,9 @@ Phases execute in numeric order: 6 -> 7 -> 8
 | 3. Natural Language Mode | v1.0 | 3/3 | Complete | 2026-04-03 |
 | 4. Context & Ranking Intelligence | v1.0 | 2/2 | Complete | 2026-04-03 |
 | 5. Cloud Backends & Terminal Compat | v1.0 | 2/2 | Complete | 2026-04-03 |
-| 6. Project Rename | v1.1 | 0/2 | Planned | - |
-| 7. CI/CD Release Pipeline | v1.1 | 0/1 | Planned | - |
-| 8. Homebrew Tap + Formula | v1.1 | 0/2 | Planned | - |
+| 6. Project Rename | v1.1 | 2/2 | Complete | 2026-04-03 |
+| 7. CI/CD Release Pipeline | v1.1 | 1/1 | Complete | 2026-04-09 |
+| 8. Homebrew Tap + Formula | v1.1 | 2/2 | Complete | 2026-04-10 |
+| 9. Binary Rename + Version Foundations | v1.2 | 3/3 | Complete | - |
+| 10. Daemon Lifecycle | v1.2 | 1/3 | Executing | - |
+| 11. CLI UX + NL Indicator | v1.2 | 0/? | Not started | - |
