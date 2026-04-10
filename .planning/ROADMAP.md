@@ -167,3 +167,4 @@ Phases execute in numeric order: 6 -> 7 -> 8
 | 6. Project Rename | v1.1 | 0/2 | Planned | - |
 | 7. CI/CD Release Pipeline | v1.1 | 0/1 | Planned | - |
 | 8. Homebrew Tap + Formula | v1.1 | 0/2 | Planned | - |
+| 9. Binary Rename + Version Foundations | v1.2 | 1/3 | Executing | - |
