@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: AliasT + Homebrew Distribution
-status: verifying
-stopped_at: Completed 07-01-PLAN.md
-last_updated: "2026-04-09T22:59:45.968Z"
-last_activity: 2026-04-09
+status: executing
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-04-10T00:15:08.120Z"
+last_activity: 2026-04-10
 progress:
   total_phases: 3
-  completed_phases: 1
-  total_plans: 3
-  completed_plans: 2
+  completed_phases: 2
+  total_plans: 5
+  completed_plans: 4
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-02)
 
 **Core value:** Type less, execute faster -- ghost text suggestions appear as you type and a hotkey lets you describe what you want in plain English.
-**Current focus:** Phase 07 — ci-cd-release-pipeline
+**Current focus:** Phase 08 — homebrew-tap-formula
 
 ## Current Position
 
-Phase: 07 (ci-cd-release-pipeline) — EXECUTING
-Plan: 1 of 1
-Status: Phase complete — ready for verification
-Last activity: 2026-04-09
+Phase: 08 (homebrew-tap-formula) — EXECUTING
+Plan: 2 of 2
+Status: Ready to execute
+Last activity: 2026-04-10
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -64,6 +64,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 05-01 P01 | 2min | 2 tasks | 5 files |
 | Phase 06 P02 | 3min | 2 tasks | 2 files |
 | Phase 07 P01 | 4min | 2 tasks | 1 files |
+| Phase 08 P01 | 1min | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -97,6 +98,8 @@ Recent decisions affecting current work:
 - [Phase 07]: Native macOS runners (macos-15 ARM64, macos-15-intel x86_64) instead of cross-compilation for arch-specific builds
 - [Phase 07]: Hand-written GitHub Actions workflow (~68 lines) instead of cargo-dist per stack decision D-02
 - [Phase 07]: Flat tarball structure so brew install extracts aliast-daemon directly at formula install time
+- [Phase 08]: Placeholder SHA256 values in formula — real values inserted after first release in Plan 02
+- [Phase 08]: Tap repo uses explicit elsif Hardware::CPU.intel? (not bare else) for fail-closed arch handling
 
 ### Pending Todos
 
@@ -110,6 +113,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-09T22:59:45.966Z
-Stopped at: Completed 07-01-PLAN.md
+Last session: 2026-04-10T00:15:08.118Z
+Stopped at: Completed 08-01-PLAN.md
 Resume file: None

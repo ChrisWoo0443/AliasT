@@ -149,7 +149,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 08-01-PLAN.md -- Create tap repo (ChrisWoo0443/homebrew-aliast), write Formula/aliast.rb with placeholder SHA256s, push
+- [x] 08-01-PLAN.md -- Create tap repo (ChrisWoo0443/homebrew-aliast), write Formula/aliast.rb with placeholder SHA256s, push
 - [ ] 08-02-PLAN.md -- Populate real SHA256 values from a release, verify brew tap + brew install end-to-end
 
 ## Progress
