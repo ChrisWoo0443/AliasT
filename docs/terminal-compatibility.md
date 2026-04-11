@@ -7,7 +7,7 @@ Ghost text rendering compatibility across macOS terminals.
 | Terminal      | Version | Tested | Ghost Text Visible | Style Presets Work | Quirks/Notes       |
 |---------------|---------|--------|--------------------|--------------------|--------------------|
 | Terminal.app  |         | No     | Not yet tested     | Not yet tested     |                    |
-| iTerm2        |         | No     | Not yet tested     | Not yet tested     |                    |
+| iTerm2        |         | Yes    | Yes                | Not yet tested     |                    |
 | Kitty         |         | No     | Not yet tested     | Not yet tested     |                    |
 | Ghostty       |         | No     | Not yet tested     | Not yet tested     |                    |
 | Alacritty     |         | No     | Not yet tested     | Not yet tested     |                    |
@@ -41,7 +41,7 @@ For each terminal:
    ```
 3. Ensure daemon is running:
    ```bash
-   cargo run -p aliast-daemon -- start &
+   aliast start &
    ```
 4. Type a partial command that has history matches
 5. Verify ghost text appears in dimmed gray after the cursor
