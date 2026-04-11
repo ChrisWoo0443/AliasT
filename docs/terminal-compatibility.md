@@ -8,7 +8,7 @@ Ghost text rendering compatibility across macOS terminals.
 |---------------|---------|--------|--------------------|--------------------|--------------------|
 | Terminal.app  |         | Yes    | Yes                | Not yet tested     |                    |
 | iTerm2        |         | Yes    | Yes                | Not yet tested     |                    |
-| Kitty         |         | No     | Not yet tested     | Not yet tested     |                    |
+| Kitty         |         | Yes    | Yes                | Not yet tested     |                    |
 | Ghostty       |         | No     | Not yet tested     | Not yet tested     |                    |
 | Alacritty     |         | No     | Not yet tested     | Not yet tested     |                    |
 
