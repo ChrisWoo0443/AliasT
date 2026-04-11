@@ -6,7 +6,7 @@ Ghost text rendering compatibility across macOS terminals.
 
 | Terminal      | Version | Tested | Ghost Text Visible | Style Presets Work | Quirks/Notes       |
 |---------------|---------|--------|--------------------|--------------------|--------------------|
-| Terminal.app  |         | No     | Not yet tested     | Not yet tested     |                    |
+| Terminal.app  |         | Yes    | Yes                | Not yet tested     |                    |
 | iTerm2        |         | Yes    | Yes                | Not yet tested     |                    |
 | Kitty         |         | No     | Not yet tested     | Not yet tested     |                    |
 | Ghostty       |         | No     | Not yet tested     | Not yet tested     |                    |
