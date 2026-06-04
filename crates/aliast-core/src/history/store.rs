@@ -33,8 +33,7 @@ impl HistoryStore {
         )?;
 
         // Schema migration: add exit_code column if missing (user_version tracking)
-        let user_version: i32 =
-            conn.query_row("PRAGMA user_version", [], |row| row.get(0))?;
+        let user_version: i32 = conn.query_row("PRAGMA user_version", [], |row| row.get(0))?;
 
         if user_version < 1 {
             // Check if exit_code column already exists (table may have been created fresh above)
@@ -43,9 +42,7 @@ impl HistoryStore {
                 .is_ok();
 
             if !has_exit_code {
-                conn.execute_batch(
-                    "ALTER TABLE history ADD COLUMN exit_code INTEGER;",
-                )?;
+                conn.execute_batch("ALTER TABLE history ADD COLUMN exit_code INTEGER;")?;
             }
 
             conn.execute_batch("PRAGMA user_version = 1;")?;
@@ -75,7 +72,10 @@ impl HistoryStore {
     /// Uses case-sensitive LIKE with escaped SQL wildcards for safe prefix matching.
     pub fn suggest_prefix(&self, prefix: &str) -> Result<Option<String>, rusqlite::Error> {
         // Escape SQL LIKE wildcards in the prefix
-        let escaped_prefix = prefix.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+        let escaped_prefix = prefix
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_");
         let like_pattern = format!("{}%", escaped_prefix);
 
         let mut statement = self.conn.prepare_cached(
@@ -113,7 +113,10 @@ impl HistoryStore {
             return Ok(None);
         }
 
-        let escaped_prefix = prefix.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+        let escaped_prefix = prefix
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_");
         let like_pattern = format!("{}%", escaped_prefix);
 
         let now = std::time::SystemTime::now()

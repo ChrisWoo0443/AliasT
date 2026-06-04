@@ -4,14 +4,14 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use tokio::signal::unix::{signal, SignalKind};
+use tokio::signal::unix::{SignalKind, signal};
 use tokio_util::sync::CancellationToken;
 use tracing_subscriber::EnvFilter;
 
 use aliast_core::ai::claude::ClaudeBackend;
 use aliast_core::ai::openai::OpenAiBackend;
 use aliast_core::ai::{AiBackend, ollama::OllamaBackend};
-use aliast_core::history::{parse_history_file, HistoryStore};
+use aliast_core::history::{HistoryStore, parse_history_file};
 use aliast_daemon::DaemonState;
 
 mod connection;
@@ -110,7 +110,10 @@ fn init_tracing() -> Result<()> {
         .map(|dirs| dirs.data_local_dir().join("aliast"))
         .unwrap_or_else(|| {
             let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-            PathBuf::from(home).join(".local").join("share").join("aliast")
+            PathBuf::from(home)
+                .join(".local")
+                .join("share")
+                .join("aliast")
         });
 
     std::fs::create_dir_all(&log_dir)?;
@@ -120,8 +123,8 @@ fn init_tracing() -> Result<()> {
         .append(true)
         .open(log_path)?;
 
-    let filter = EnvFilter::try_from_env("ALIAST_LOG_LEVEL")
-        .unwrap_or_else(|_| EnvFilter::new("warn"));
+    let filter =
+        EnvFilter::try_from_env("ALIAST_LOG_LEVEL").unwrap_or_else(|_| EnvFilter::new("warn"));
 
     tracing_subscriber::fmt()
         .with_env_filter(filter)
@@ -139,13 +142,19 @@ async fn main() -> Result<()> {
         .map(|dirs| dirs.data_local_dir().join("alias"))
         .unwrap_or_else(|| {
             let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-            PathBuf::from(home).join(".local").join("share").join("alias")
+            PathBuf::from(home)
+                .join(".local")
+                .join("share")
+                .join("alias")
         });
     let new_data_dir = directories::BaseDirs::new()
         .map(|dirs| dirs.data_local_dir().join("aliast"))
         .unwrap_or_else(|| {
             let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-            PathBuf::from(home).join(".local").join("share").join("aliast")
+            PathBuf::from(home)
+                .join(".local")
+                .join("share")
+                .join("aliast")
         });
     let _ = migration::migrate_data_files(&old_data_dir, &new_data_dir);
 
@@ -163,7 +172,10 @@ async fn main() -> Result<()> {
                 .map(|dirs| dirs.data_local_dir().join("aliast"))
                 .unwrap_or_else(|| {
                     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-                    PathBuf::from(home).join(".local").join("share").join("aliast")
+                    PathBuf::from(home)
+                        .join(".local")
+                        .join("share")
+                        .join("aliast")
                 });
             std::fs::create_dir_all(&data_dir)?;
             let db_path = data_dir.join("history.db");
@@ -207,9 +219,11 @@ async fn main() -> Result<()> {
 
             // Initialize AI backend from ALIAST_NL_BACKEND + ALIAST_NL_MODEL env vars
             let ai_backend: Option<Arc<dyn AiBackend>> = {
-                let model = std::env::var("ALIAST_NL_MODEL").ok().filter(|m| !m.is_empty());
-                let backend_name = std::env::var("ALIAST_NL_BACKEND")
-                    .unwrap_or_else(|_| "ollama".to_string());
+                let model = std::env::var("ALIAST_NL_MODEL")
+                    .ok()
+                    .filter(|m| !m.is_empty());
+                let backend_name =
+                    std::env::var("ALIAST_NL_BACKEND").unwrap_or_else(|_| "ollama".to_string());
 
                 match model {
                     Some(model) => match backend_name.as_str() {
@@ -219,7 +233,9 @@ async fn main() -> Result<()> {
                                 Some(Arc::new(ClaudeBackend::new(key, model)))
                             }
                             _ => {
-                                tracing::warn!("ALIAST_NL_BACKEND=claude but ALIAST_ANTHROPIC_KEY not set -- NL mode disabled");
+                                tracing::warn!(
+                                    "ALIAST_NL_BACKEND=claude but ALIAST_ANTHROPIC_KEY not set -- NL mode disabled"
+                                );
                                 None
                             }
                         },
@@ -229,7 +245,9 @@ async fn main() -> Result<()> {
                                 Some(Arc::new(OpenAiBackend::new(key, model)))
                             }
                             _ => {
-                                tracing::warn!("ALIAST_NL_BACKEND=openai but ALIAST_OPENAI_KEY not set -- NL mode disabled");
+                                tracing::warn!(
+                                    "ALIAST_NL_BACKEND=openai but ALIAST_OPENAI_KEY not set -- NL mode disabled"
+                                );
                                 None
                             }
                         },
@@ -266,9 +284,8 @@ async fn main() -> Result<()> {
                 model_name: derived_model_name,
             };
 
-            let server_handle = tokio::spawn(async move {
-                server::run_server(&socket_path, state).await
-            });
+            let server_handle =
+                tokio::spawn(async move { server::run_server(&socket_path, state).await });
 
             // Wait for shutdown signals OR cancellation from IPC shutdown command
             let mut sigterm = signal(SignalKind::terminate())?;
@@ -293,22 +310,20 @@ async fn main() -> Result<()> {
 
             tracing::info!("Daemon stopped cleanly");
         }
-        Commands::Stop => {
-            match send_ipc_request(r#"{"id":"stop-1","type":"shutdown"}"#) {
-                Ok(response) => {
-                    if response.contains("\"shutting_down\"") {
-                        println!("aliast: daemon stopped");
-                    } else {
-                        eprintln!("aliast: unexpected response from daemon");
-                        std::process::exit(1);
-                    }
-                }
-                Err(err) => {
-                    eprintln!("{}", err);
+        Commands::Stop => match send_ipc_request(r#"{"id":"stop-1","type":"shutdown"}"#) {
+            Ok(response) => {
+                if response.contains("\"shutting_down\"") {
+                    println!("aliast: daemon stopped");
+                } else {
+                    eprintln!("aliast: unexpected response from daemon");
                     std::process::exit(1);
                 }
             }
-        }
+            Err(err) => {
+                eprintln!("{}", err);
+                std::process::exit(1);
+            }
+        },
         Commands::Status => {
             let socket_path = lifecycle::default_socket_path();
             match send_ipc_request(r#"{"id":"status-1","type":"get_status"}"#) {
@@ -340,38 +355,34 @@ async fn main() -> Result<()> {
                 }
             }
         }
-        Commands::On => {
-            match send_ipc_request(r#"{"id":"on-1","type":"enable"}"#) {
-                Ok(response) => {
-                    if response.contains("\"ack\"") {
-                        println!("aliast: suggestions enabled");
-                    } else {
-                        eprintln!("aliast: unexpected response");
-                        std::process::exit(1);
-                    }
-                }
-                Err(err) => {
-                    eprintln!("{}", err);
+        Commands::On => match send_ipc_request(r#"{"id":"on-1","type":"enable"}"#) {
+            Ok(response) => {
+                if response.contains("\"ack\"") {
+                    println!("aliast: suggestions enabled");
+                } else {
+                    eprintln!("aliast: unexpected response");
                     std::process::exit(1);
                 }
             }
-        }
-        Commands::Off => {
-            match send_ipc_request(r#"{"id":"off-1","type":"disable"}"#) {
-                Ok(response) => {
-                    if response.contains("\"ack\"") {
-                        println!("aliast: suggestions disabled");
-                    } else {
-                        eprintln!("aliast: unexpected response");
-                        std::process::exit(1);
-                    }
-                }
-                Err(err) => {
-                    eprintln!("{}", err);
+            Err(err) => {
+                eprintln!("{}", err);
+                std::process::exit(1);
+            }
+        },
+        Commands::Off => match send_ipc_request(r#"{"id":"off-1","type":"disable"}"#) {
+            Ok(response) => {
+                if response.contains("\"ack\"") {
+                    println!("aliast: suggestions disabled");
+                } else {
+                    eprintln!("aliast: unexpected response");
                     std::process::exit(1);
                 }
             }
-        }
+            Err(err) => {
+                eprintln!("{}", err);
+                std::process::exit(1);
+            }
+        },
         Commands::Doctor => {
             let checks = doctor::run_doctor_checks().await;
             doctor::print_doctor_report(&checks);

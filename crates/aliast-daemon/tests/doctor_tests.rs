@@ -66,7 +66,10 @@ fn test_check_history_db_missing() {
     let tmp_dir = tempfile::tempdir().unwrap();
     let db_path = tmp_dir.path().join("nonexistent.db");
     let check = check_history_db_at(&db_path);
-    assert!(check.passed, "missing DB is OK -- will be created on first start");
+    assert!(
+        check.passed,
+        "missing DB is OK -- will be created on first start"
+    );
     assert!(check.detail.contains("will be created"));
 }
 

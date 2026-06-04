@@ -3,9 +3,9 @@ use std::path::Path;
 use anyhow::Result;
 use tokio::net::UnixListener;
 
+use crate::DaemonState;
 use crate::connection::handle_connection;
 use crate::lifecycle;
-use crate::DaemonState;
 
 /// Runs the daemon server, listening for connections on the given Unix socket path.
 ///

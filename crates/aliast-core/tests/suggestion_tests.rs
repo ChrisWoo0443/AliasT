@@ -79,7 +79,9 @@ fn suggest_with_context_uses_frecency_ranking() {
 
     // Record "git checkout main" many times in /proj
     for i in 0..5 {
-        store.record_command("git checkout main", now - 100 + i, "/proj", Some(0)).unwrap();
+        store
+            .record_command("git checkout main", now - 100 + i, "/proj", Some(0))
+            .unwrap();
     }
 
     let context = SuggestionContext {

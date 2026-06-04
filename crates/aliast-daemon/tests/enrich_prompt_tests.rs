@@ -17,7 +17,10 @@ fn enrich_prompt_with_failed_exit_code() {
 #[test]
 fn enrich_prompt_success_exit_code_not_mentioned() {
     let result = enrich_prompt("list files", None, Some(0), None);
-    assert!(!result.contains("exit code"), "success exit code should not be mentioned");
+    assert!(
+        !result.contains("exit code"),
+        "success exit code should not be mentioned"
+    );
     assert_eq!(result, "list files");
 }
 
@@ -37,12 +40,7 @@ fn enrich_prompt_no_context_returns_original() {
 
 #[test]
 fn enrich_prompt_with_all_context() {
-    let result = enrich_prompt(
-        "pull latest",
-        Some("/proj"),
-        Some(1),
-        Some("main"),
-    );
+    let result = enrich_prompt("pull latest", Some("/proj"), Some(1), Some("main"));
     assert!(result.contains("[Context]"));
     assert!(result.contains("Current directory: /proj"));
     assert!(result.contains("Last command failed with exit code: 1"));

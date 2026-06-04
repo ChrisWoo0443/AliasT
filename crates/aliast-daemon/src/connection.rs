@@ -99,10 +99,10 @@ pub fn enrich_prompt(
     if let Some(dir) = cwd {
         parts.push(format!("Current directory: {}", dir));
     }
-    if let Some(code) = exit_code {
-        if code != 0 {
-            parts.push(format!("Last command failed with exit code: {}", code));
-        }
+    if let Some(code) = exit_code
+        && code != 0
+    {
+        parts.push(format!("Last command failed with exit code: {}", code));
     }
     if let Some(branch) = git_branch {
         parts.push(format!("Git branch: {}", branch));
@@ -129,7 +129,10 @@ async fn dispatch_request(request: Request, state: &DaemonState) -> Response {
             git_branch,
         } => {
             if !state.enabled.load(Ordering::Relaxed) {
-                return Response::Suggestion { id, text: String::new() };
+                return Response::Suggestion {
+                    id,
+                    text: String::new(),
+                };
             }
             let store_guard = state.store.lock().unwrap();
             let context = SuggestionContext {
@@ -175,12 +178,8 @@ async fn dispatch_request(request: Request, state: &DaemonState) -> Response {
             }
             match &state.ai_backend {
                 Some(backend) => {
-                    let enriched = enrich_prompt(
-                        &prompt,
-                        cwd.as_deref(),
-                        exit_code,
-                        git_branch.as_deref(),
-                    );
+                    let enriched =
+                        enrich_prompt(&prompt, cwd.as_deref(), exit_code, git_branch.as_deref());
                     match backend.generate(&enriched).await {
                         Ok(command_text) => Response::Command {
                             id,

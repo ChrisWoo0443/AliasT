@@ -11,7 +11,10 @@ fn serialize_complete_request() {
         git_branch: None,
     };
     let json = serde_json::to_string(&request).unwrap();
-    assert_eq!(json, r#"{"type":"complete","id":"r1","buf":"git ch","cur":6}"#);
+    assert_eq!(
+        json,
+        r#"{"type":"complete","id":"r1","buf":"git ch","cur":6}"#
+    );
 }
 
 #[test]
@@ -197,10 +200,7 @@ fn serialize_command_response() {
         text: "ls -la".to_string(),
     };
     let json = serde_json::to_string(&response).unwrap();
-    assert_eq!(
-        json,
-        r#"{"type":"command","id":"r1","text":"ls -la"}"#
-    );
+    assert_eq!(json, r#"{"type":"command","id":"r1","text":"ls -la"}"#);
 }
 
 #[test]

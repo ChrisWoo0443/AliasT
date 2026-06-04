@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
-use tokio::time::{timeout, Duration};
+use tokio::time::{Duration, timeout};
 use tokio_util::sync::CancellationToken;
 
 use aliast_core::history::HistoryStore;
@@ -184,7 +184,10 @@ async fn server_shuts_down_on_cancellation_token() {
 
     // Verify server is running
     let stream = UnixStream::connect(&socket_path).await;
-    assert!(stream.is_ok(), "should be able to connect before cancellation");
+    assert!(
+        stream.is_ok(),
+        "should be able to connect before cancellation"
+    );
     drop(stream);
 
     // Cancel the server

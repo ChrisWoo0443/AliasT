@@ -1,7 +1,7 @@
 mod parser;
 mod store;
 
-pub use parser::{parse_history_file, HistoryEntry};
+pub use parser::{HistoryEntry, parse_history_file};
 pub use store::HistoryStore;
 
 /// Environmental context for smarter suggestion ranking.

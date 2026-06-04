@@ -25,7 +25,10 @@ fn cleanup_returns_error_when_daemon_is_listening() {
     let _listener = UnixListener::bind(&socket_path).unwrap();
 
     let result = lifecycle::cleanup_stale_socket(&socket_path);
-    assert!(result.is_err(), "should return error when daemon is already running");
+    assert!(
+        result.is_err(),
+        "should return error when daemon is already running"
+    );
     let error_message = result.unwrap_err().to_string();
     assert!(
         error_message.contains("already running"),
@@ -47,7 +50,11 @@ fn cleanup_creates_parent_directories_with_correct_permissions() {
     use std::os::unix::fs::PermissionsExt;
 
     let temp_dir = tempfile::tempdir().unwrap();
-    let nested_path = temp_dir.path().join("deep").join("nested").join("test.sock");
+    let nested_path = temp_dir
+        .path()
+        .join("deep")
+        .join("nested")
+        .join("test.sock");
 
     // Parent directories do not exist yet
     assert!(!nested_path.parent().unwrap().exists());
@@ -59,7 +66,10 @@ fn cleanup_creates_parent_directories_with_correct_permissions() {
 
     let permissions = std::fs::metadata(parent).unwrap().permissions();
     let mode = permissions.mode() & 0o777;
-    assert_eq!(mode, 0o700, "parent directory should have 0o700 permissions, got {mode:o}");
+    assert_eq!(
+        mode, 0o700,
+        "parent directory should have 0o700 permissions, got {mode:o}"
+    );
 }
 
 #[test]
@@ -109,7 +119,10 @@ fn default_socket_path_fallback_without_xdg() {
 
     let uid = unsafe { libc::getuid() };
     let expected = PathBuf::from(format!("/tmp/aliast-{uid}/aliast/aliast.sock"));
-    assert_eq!(path, expected, "should fallback to /tmp/aliast-{{uid}}/aliast/aliast.sock");
+    assert_eq!(
+        path, expected,
+        "should fallback to /tmp/aliast-{{uid}}/aliast/aliast.sock"
+    );
 
     // Restore original value
     if let Some(val) = original {

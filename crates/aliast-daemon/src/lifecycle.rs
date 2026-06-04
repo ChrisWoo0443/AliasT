@@ -37,7 +37,9 @@ pub fn cleanup_stale_socket(path: &Path) -> anyhow::Result<()> {
 /// Checks `XDG_RUNTIME_DIR` first, falls back to `/tmp/aliast-{uid}/aliast/aliast.sock`.
 pub fn default_socket_path() -> PathBuf {
     if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
-        return PathBuf::from(runtime_dir).join("aliast").join("aliast.sock");
+        return PathBuf::from(runtime_dir)
+            .join("aliast")
+            .join("aliast.sock");
     }
 
     let uid = unsafe { libc::getuid() };

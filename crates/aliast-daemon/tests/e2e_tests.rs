@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
-use tokio::time::{timeout, Duration};
+use tokio::time::{Duration, timeout};
 use tokio_util::sync::CancellationToken;
 
 use aliast_core::ai::{AiBackend, AiError};
@@ -234,11 +234,7 @@ async fn test_ping_returns_pong() {
 
     let result = timeout(Duration::from_secs(5), async {
         let mut stream = UnixStream::connect(&socket_path).await.unwrap();
-        let response = send_ndjson(
-            &mut stream,
-            r#"{"id":"r0","type":"ping"}"#,
-        )
-        .await;
+        let response = send_ndjson(&mut stream, r#"{"id":"r0","type":"ping"}"#).await;
 
         match response {
             Response::Pong { id, v } => {
@@ -370,7 +366,12 @@ async fn test_record_with_exit_code() {
             r#"{"id":"rec1","type":"record","cmd":"ls","cwd":"/home","exit_code":0}"#,
         )
         .await;
-        assert_eq!(response, Response::Ack { id: "rec1".to_string() });
+        assert_eq!(
+            response,
+            Response::Ack {
+                id: "rec1".to_string()
+            }
+        );
     })
     .await;
 
@@ -389,7 +390,12 @@ async fn test_record_without_exit_code_backward_compat() {
             r#"{"id":"rec1","type":"record","cmd":"ls","cwd":"/home"}"#,
         )
         .await;
-        assert_eq!(response, Response::Ack { id: "rec1".to_string() });
+        assert_eq!(
+            response,
+            Response::Ack {
+                id: "rec1".to_string()
+            }
+        );
     })
     .await;
 
@@ -456,7 +462,12 @@ async fn test_complete_without_context_backward_compat() {
             r#"{"id":"rec1","type":"record","cmd":"git checkout main","cwd":"/home"}"#,
         )
         .await;
-        assert_eq!(response, Response::Ack { id: "rec1".to_string() });
+        assert_eq!(
+            response,
+            Response::Ack {
+                id: "rec1".to_string()
+            }
+        );
 
         // Complete without context fields (old format)
         let response = send_ndjson(
@@ -524,11 +535,7 @@ async fn test_shutdown_via_protocol() {
         let mut stream = UnixStream::connect(&socket_path).await.unwrap();
 
         // Send shutdown request
-        let response = send_ndjson(
-            &mut stream,
-            r#"{"type":"shutdown","id":"s1"}"#,
-        )
-        .await;
+        let response = send_ndjson(&mut stream, r#"{"type":"shutdown","id":"s1"}"#).await;
 
         match response {
             Response::ShuttingDown { id } => {
@@ -542,7 +549,10 @@ async fn test_shutdown_via_protocol() {
 
         // Verify daemon is no longer reachable
         let connect_result = UnixStream::connect(&socket_path).await;
-        assert!(connect_result.is_err(), "daemon should be unreachable after shutdown");
+        assert!(
+            connect_result.is_err(),
+            "daemon should be unreachable after shutdown"
+        );
     })
     .await;
 
@@ -557,19 +567,16 @@ async fn test_enable_disable_toggle() {
         let mut stream = UnixStream::connect(&socket_path).await.unwrap();
 
         // Send Disable
-        let response = send_ndjson(
-            &mut stream,
-            r#"{"type":"disable","id":"d1"}"#,
-        )
-        .await;
-        assert_eq!(response, Response::Ack { id: "d1".to_string() });
+        let response = send_ndjson(&mut stream, r#"{"type":"disable","id":"d1"}"#).await;
+        assert_eq!(
+            response,
+            Response::Ack {
+                id: "d1".to_string()
+            }
+        );
 
         // Check status -- should be disabled
-        let response = send_ndjson(
-            &mut stream,
-            r#"{"type":"get_status","id":"gs1"}"#,
-        )
-        .await;
+        let response = send_ndjson(&mut stream, r#"{"type":"get_status","id":"gs1"}"#).await;
         match &response {
             Response::Status { id, enabled, .. } => {
                 assert_eq!(id, "gs1");
@@ -579,19 +586,16 @@ async fn test_enable_disable_toggle() {
         }
 
         // Send Enable
-        let response = send_ndjson(
-            &mut stream,
-            r#"{"type":"enable","id":"e1"}"#,
-        )
-        .await;
-        assert_eq!(response, Response::Ack { id: "e1".to_string() });
+        let response = send_ndjson(&mut stream, r#"{"type":"enable","id":"e1"}"#).await;
+        assert_eq!(
+            response,
+            Response::Ack {
+                id: "e1".to_string()
+            }
+        );
 
         // Check status -- should be enabled again
-        let response = send_ndjson(
-            &mut stream,
-            r#"{"type":"get_status","id":"gs2"}"#,
-        )
-        .await;
+        let response = send_ndjson(&mut stream, r#"{"type":"get_status","id":"gs2"}"#).await;
         match &response {
             Response::Status { id, enabled, .. } => {
                 assert_eq!(id, "gs2");
@@ -619,15 +623,21 @@ async fn test_disabled_complete_returns_empty() {
             r#"{"id":"rec1","type":"record","cmd":"git checkout main","cwd":"/home"}"#,
         )
         .await;
-        assert_eq!(response, Response::Ack { id: "rec1".to_string() });
+        assert_eq!(
+            response,
+            Response::Ack {
+                id: "rec1".to_string()
+            }
+        );
 
         // Disable suggestions
-        let response = send_ndjson(
-            &mut stream,
-            r#"{"type":"disable","id":"d1"}"#,
-        )
-        .await;
-        assert_eq!(response, Response::Ack { id: "d1".to_string() });
+        let response = send_ndjson(&mut stream, r#"{"type":"disable","id":"d1"}"#).await;
+        assert_eq!(
+            response,
+            Response::Ack {
+                id: "d1".to_string()
+            }
+        );
 
         // Complete request should return empty suggestion
         let response = send_ndjson(
@@ -658,12 +668,13 @@ async fn test_disabled_generate_returns_error() {
         let mut stream = UnixStream::connect(&socket_path).await.unwrap();
 
         // Disable suggestions
-        let response = send_ndjson(
-            &mut stream,
-            r#"{"type":"disable","id":"d1"}"#,
-        )
-        .await;
-        assert_eq!(response, Response::Ack { id: "d1".to_string() });
+        let response = send_ndjson(&mut stream, r#"{"type":"disable","id":"d1"}"#).await;
+        assert_eq!(
+            response,
+            Response::Ack {
+                id: "d1".to_string()
+            }
+        );
 
         // Generate request should return error about being paused
         let response = send_ndjson(
@@ -697,12 +708,13 @@ async fn test_disabled_record_still_works() {
         let mut stream = UnixStream::connect(&socket_path).await.unwrap();
 
         // Disable suggestions
-        let response = send_ndjson(
-            &mut stream,
-            r#"{"type":"disable","id":"d1"}"#,
-        )
-        .await;
-        assert_eq!(response, Response::Ack { id: "d1".to_string() });
+        let response = send_ndjson(&mut stream, r#"{"type":"disable","id":"d1"}"#).await;
+        assert_eq!(
+            response,
+            Response::Ack {
+                id: "d1".to_string()
+            }
+        );
 
         // Record should still work when disabled (per D-05)
         let response = send_ndjson(
@@ -728,18 +740,15 @@ async fn test_disabled_record_still_works() {
 #[tokio::test]
 async fn test_get_status_includes_backend_info() {
     let mock_backend = Arc::new(MockAiBackend::new("unused"));
-    let (socket_path, cancel_token, _temp_dir) =
-        spawn_daemon_with_ai(mock_backend).await;
+    let (socket_path, cancel_token, _temp_dir) = spawn_daemon_with_ai(mock_backend).await;
 
     let result = timeout(Duration::from_secs(5), async {
         let mut stream = UnixStream::connect(&socket_path).await.unwrap();
-        let response = send_ndjson(
-            &mut stream,
-            r#"{"type":"get_status","id":"gs1"}"#,
-        )
-        .await;
+        let response = send_ndjson(&mut stream, r#"{"type":"get_status","id":"gs1"}"#).await;
         match response {
-            Response::Status { id, backend, model, .. } => {
+            Response::Status {
+                id, backend, model, ..
+            } => {
                 assert_eq!(id, "gs1");
                 assert_eq!(backend, "mock");
                 assert_eq!(model, "test-model");
@@ -759,13 +768,11 @@ async fn test_get_status_no_backend() {
 
     let result = timeout(Duration::from_secs(5), async {
         let mut stream = UnixStream::connect(&socket_path).await.unwrap();
-        let response = send_ndjson(
-            &mut stream,
-            r#"{"type":"get_status","id":"gs1"}"#,
-        )
-        .await;
+        let response = send_ndjson(&mut stream, r#"{"type":"get_status","id":"gs1"}"#).await;
         match response {
-            Response::Status { id, backend, model, .. } => {
+            Response::Status {
+                id, backend, model, ..
+            } => {
                 assert_eq!(id, "gs1");
                 assert_eq!(backend, "none");
                 assert_eq!(model, "");

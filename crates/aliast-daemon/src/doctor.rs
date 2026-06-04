@@ -87,7 +87,9 @@ pub fn check_daemon_running_at(socket_path: &Path) -> DoctorCheck {
 /// Check 2: AI backend configured -- read ALIAST_NL_BACKEND and ALIAST_NL_MODEL.
 pub fn check_ai_backend_configured() -> DoctorCheck {
     let backend = std::env::var("ALIAST_NL_BACKEND").unwrap_or_default();
-    let model = std::env::var("ALIAST_NL_MODEL").ok().filter(|m| !m.is_empty());
+    let model = std::env::var("ALIAST_NL_MODEL")
+        .ok()
+        .filter(|m| !m.is_empty());
     check_ai_backend_configured_with(&backend, model.as_deref())
 }
 
@@ -111,24 +113,29 @@ pub fn check_ai_backend_configured_with(backend: &str, model: Option<&str>) -> D
             name: "AI backend configured",
             passed: false,
             detail: "No AI model configured -- NL mode will be disabled".to_string(),
-            fix: Some(
-                "Set ALIAST_NL_MODEL (e.g., export ALIAST_NL_MODEL=llama3.2)".to_string(),
-            ),
+            fix: Some("Set ALIAST_NL_MODEL (e.g., export ALIAST_NL_MODEL=llama3.2)".to_string()),
         },
     }
 }
 
 /// Check 3: API key present -- check relevant key based on backend.
 pub fn check_api_key_present() -> DoctorCheck {
-    let backend = std::env::var("ALIAST_NL_BACKEND")
-        .unwrap_or_else(|_| "ollama".to_string());
-    let claude_key = std::env::var("ALIAST_ANTHROPIC_KEY").ok().filter(|k| !k.is_empty());
-    let openai_key = std::env::var("ALIAST_OPENAI_KEY").ok().filter(|k| !k.is_empty());
+    let backend = std::env::var("ALIAST_NL_BACKEND").unwrap_or_else(|_| "ollama".to_string());
+    let claude_key = std::env::var("ALIAST_ANTHROPIC_KEY")
+        .ok()
+        .filter(|k| !k.is_empty());
+    let openai_key = std::env::var("ALIAST_OPENAI_KEY")
+        .ok()
+        .filter(|k| !k.is_empty());
     check_api_key_present_with(&backend, claude_key.is_some(), openai_key.is_some())
 }
 
 /// Testable variant that accepts values directly.
-pub fn check_api_key_present_with(backend: &str, has_claude_key: bool, has_openai_key: bool) -> DoctorCheck {
+pub fn check_api_key_present_with(
+    backend: &str,
+    has_claude_key: bool,
+    has_openai_key: bool,
+) -> DoctorCheck {
     match backend {
         "ollama" | "" => DoctorCheck {
             name: "API key present",
@@ -149,9 +156,7 @@ pub fn check_api_key_present_with(backend: &str, has_claude_key: bool, has_opena
                     name: "API key present",
                     passed: false,
                     detail: "ALIAST_ANTHROPIC_KEY not set".to_string(),
-                    fix: Some(
-                        "Set ALIAST_ANTHROPIC_KEY with your Anthropic API key".to_string(),
-                    ),
+                    fix: Some("Set ALIAST_ANTHROPIC_KEY with your Anthropic API key".to_string()),
                 }
             }
         }
@@ -176,17 +181,14 @@ pub fn check_api_key_present_with(backend: &str, has_claude_key: bool, has_opena
             name: "API key present",
             passed: false,
             detail: format!("Unknown backend: {}", other),
-            fix: Some(
-                "Set ALIAST_NL_BACKEND to ollama, claude, or openai".to_string(),
-            ),
+            fix: Some("Set ALIAST_NL_BACKEND to ollama, claude, or openai".to_string()),
         },
     }
 }
 
 /// Check 4: Ollama reachable -- HTTP GET to localhost:11434.
 async fn check_ollama_reachable() -> DoctorCheck {
-    let backend = std::env::var("ALIAST_NL_BACKEND")
-        .unwrap_or_else(|_| "ollama".to_string());
+    let backend = std::env::var("ALIAST_NL_BACKEND").unwrap_or_else(|_| "ollama".to_string());
 
     if backend != "ollama" && !backend.is_empty() {
         return DoctorCheck {
@@ -220,8 +222,7 @@ async fn check_ollama_reachable() -> DoctorCheck {
 
 /// Check 5: API key valid -- lightweight test call to backend.
 async fn check_api_key_valid() -> DoctorCheck {
-    let backend = std::env::var("ALIAST_NL_BACKEND")
-        .unwrap_or_else(|_| "ollama".to_string());
+    let backend = std::env::var("ALIAST_NL_BACKEND").unwrap_or_else(|_| "ollama".to_string());
     let model = std::env::var("ALIAST_NL_MODEL").unwrap_or_default();
 
     match backend.as_str() {
@@ -238,8 +239,7 @@ async fn check_api_key_valid() -> DoctorCheck {
                 }
             };
 
-            let claude_backend =
-                aliast_core::ai::claude::ClaudeBackend::new(api_key, model);
+            let claude_backend = aliast_core::ai::claude::ClaudeBackend::new(api_key, model);
             match claude_backend.health_check().await {
                 Ok(()) => DoctorCheck {
                     name: "API key valid",
@@ -252,8 +252,7 @@ async fn check_api_key_valid() -> DoctorCheck {
                     passed: false,
                     detail: format!("Claude API check failed: {}", err),
                     fix: Some(
-                        "Verify your ALIAST_ANTHROPIC_KEY is correct and has credits"
-                            .to_string(),
+                        "Verify your ALIAST_ANTHROPIC_KEY is correct and has credits".to_string(),
                     ),
                 },
             }
@@ -271,8 +270,7 @@ async fn check_api_key_valid() -> DoctorCheck {
                 }
             };
 
-            let openai_backend =
-                aliast_core::ai::openai::OpenAiBackend::new(api_key, model);
+            let openai_backend = aliast_core::ai::openai::OpenAiBackend::new(api_key, model);
             match openai_backend.health_check().await {
                 Ok(()) => DoctorCheck {
                     name: "API key valid",
@@ -337,7 +335,10 @@ pub fn check_history_db_at(db_path: &Path) -> DoctorCheck {
                 DoctorCheck {
                     name: "History database",
                     passed: true,
-                    detail: format!("Database at {} is empty -- will be populated on use", db_path.display()),
+                    detail: format!(
+                        "Database at {} is empty -- will be populated on use",
+                        db_path.display()
+                    ),
                     fix: None,
                 }
             } else {
@@ -357,10 +358,7 @@ pub fn check_history_db_at(db_path: &Path) -> DoctorCheck {
             name: "History database",
             passed: false,
             detail: format!("Cannot read {}: {}", db_path.display(), err),
-            fix: Some(format!(
-                "Check file permissions on {}",
-                db_path.display()
-            )),
+            fix: Some(format!("Check file permissions on {}", db_path.display())),
         },
     }
 }

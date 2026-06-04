@@ -12,8 +12,14 @@ fn migrate_moves_files_from_old_to_new_directory() {
 
     migrate_data_files(&old_dir, &new_dir).unwrap();
 
-    assert!(!old_dir.join("history.db").exists(), "old history.db should be moved");
-    assert!(!old_dir.join("daemon.log").exists(), "old daemon.log should be moved");
+    assert!(
+        !old_dir.join("history.db").exists(),
+        "old history.db should be moved"
+    );
+    assert!(
+        !old_dir.join("daemon.log").exists(),
+        "old daemon.log should be moved"
+    );
     assert_eq!(
         std::fs::read_to_string(new_dir.join("history.db")).unwrap(),
         "test-db-content"
@@ -38,7 +44,10 @@ fn migrate_does_not_overwrite_existing_new_files() {
     migrate_data_files(&old_dir, &new_dir).unwrap();
 
     // Old file should still exist (not moved because new already exists)
-    assert!(old_dir.join("history.db").exists(), "old file should remain when new exists");
+    assert!(
+        old_dir.join("history.db").exists(),
+        "old file should remain when new exists"
+    );
     assert_eq!(
         std::fs::read_to_string(new_dir.join("history.db")).unwrap(),
         "new-data",
@@ -54,8 +63,14 @@ fn migrate_no_op_when_old_files_do_not_exist() {
 
     // Neither directory exists
     let result = migrate_data_files(&old_dir, &new_dir);
-    assert!(result.is_ok(), "should succeed as no-op when old files absent");
-    assert!(!new_dir.exists(), "new dir should not be created when nothing to migrate");
+    assert!(
+        result.is_ok(),
+        "should succeed as no-op when old files absent"
+    );
+    assert!(
+        !new_dir.exists(),
+        "new dir should not be created when nothing to migrate"
+    );
 }
 
 #[test]

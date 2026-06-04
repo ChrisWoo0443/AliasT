@@ -17,7 +17,9 @@ fn record_command_and_query() {
     let db_path = tmp_dir.path().join("test.db");
     let store = HistoryStore::open(&db_path).unwrap();
 
-    store.record_command("git status", 1000, "/home", None).unwrap();
+    store
+        .record_command("git status", 1000, "/home", None)
+        .unwrap();
 
     let count = store.count().unwrap();
     assert_eq!(count, 1);
@@ -73,7 +75,9 @@ fn suggest_prefix_is_case_sensitive() {
     let db_path = tmp_dir.path().join("test.db");
     let store = HistoryStore::open(&db_path).unwrap();
 
-    store.record_command("git status", 1000, "/home", None).unwrap();
+    store
+        .record_command("git status", 1000, "/home", None)
+        .unwrap();
 
     let result = store.suggest_prefix("Git").unwrap();
     assert_eq!(result, None);
@@ -130,11 +134,16 @@ fn fresh_db_has_user_version_1_and_exit_code_column() {
 
     // Verify by opening raw connection
     let conn = rusqlite::Connection::open(&db_path).unwrap();
-    let version: i32 = conn.query_row("PRAGMA user_version", [], |row| row.get(0)).unwrap();
+    let version: i32 = conn
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .unwrap();
     assert_eq!(version, 1);
 
     // Verify exit_code column exists
-    let result = conn.execute("INSERT INTO history (command, timestamp, cwd, exit_code) VALUES ('test', 0, '', 0)", []);
+    let result = conn.execute(
+        "INSERT INTO history (command, timestamp, cwd, exit_code) VALUES ('test', 0, '', 0)",
+        [],
+    );
     assert!(result.is_ok(), "exit_code column should exist");
 }
 
@@ -156,11 +165,13 @@ fn migrate_existing_db_without_exit_code() {
              CREATE INDEX IF NOT EXISTS idx_history_cmd_ts
                 ON history (command, timestamp DESC);
              PRAGMA user_version = 0;",
-        ).unwrap();
+        )
+        .unwrap();
         conn.execute(
             "INSERT INTO history (command, timestamp, cwd) VALUES ('old_cmd', 500, '/old')",
             [],
-        ).unwrap();
+        )
+        .unwrap();
     }
 
     // Open with HistoryStore should migrate
@@ -171,12 +182,16 @@ fn migrate_existing_db_without_exit_code() {
     assert_eq!(count, 1);
 
     // Can record with exit_code now
-    store.record_command("new_cmd", 1000, "/home", Some(0)).unwrap();
+    store
+        .record_command("new_cmd", 1000, "/home", Some(0))
+        .unwrap();
     assert_eq!(store.count().unwrap(), 2);
 
     // Verify user_version is now 1
     let conn = rusqlite::Connection::open(&db_path).unwrap();
-    let version: i32 = conn.query_row("PRAGMA user_version", [], |row| row.get(0)).unwrap();
+    let version: i32 = conn
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .unwrap();
     assert_eq!(version, 1);
 }
 
@@ -198,7 +213,9 @@ fn record_command_with_exit_code_nonzero() {
     let db_path = tmp_dir.path().join("test.db");
     let store = HistoryStore::open(&db_path).unwrap();
 
-    store.record_command("bad_cmd", 1000, "/home", Some(127)).unwrap();
+    store
+        .record_command("bad_cmd", 1000, "/home", Some(127))
+        .unwrap();
     assert_eq!(store.count().unwrap(), 1);
 }
 
@@ -227,10 +244,14 @@ fn frecency_frequent_command_ranks_above_infrequent() {
 
     // Record "git status" 10 times
     for i in 0..10 {
-        store.record_command("git status", now - 100 + i, "/home", Some(0)).unwrap();
+        store
+            .record_command("git status", now - 100 + i, "/home", Some(0))
+            .unwrap();
     }
     // Record "git stash" 1 time
-    store.record_command("git stash", now - 50, "/home", Some(0)).unwrap();
+    store
+        .record_command("git stash", now - 50, "/home", Some(0))
+        .unwrap();
 
     let context = SuggestionContext::default();
     let result = store.suggest_ranked("git st", &context).unwrap();
@@ -249,9 +270,13 @@ fn frecency_recent_command_ranks_above_older() {
         .as_secs() as i64;
 
     // "git stash" was run long ago
-    store.record_command("git stash", now - 2_000_000, "/home", Some(0)).unwrap();
+    store
+        .record_command("git stash", now - 2_000_000, "/home", Some(0))
+        .unwrap();
     // "git status" was run recently
-    store.record_command("git status", now - 10, "/home", Some(0)).unwrap();
+    store
+        .record_command("git status", now - 10, "/home", Some(0))
+        .unwrap();
 
     let context = SuggestionContext::default();
     let result = store.suggest_ranked("git st", &context).unwrap();
@@ -270,9 +295,13 @@ fn frecency_same_directory_ranks_higher() {
         .as_secs() as i64;
 
     // "git stash" in /proj (same dir as context) -- run once recently
-    store.record_command("git stash", now - 10, "/proj", Some(0)).unwrap();
+    store
+        .record_command("git stash", now - 10, "/proj", Some(0))
+        .unwrap();
     // "git status" in /other -- run once recently
-    store.record_command("git status", now - 10, "/other", Some(0)).unwrap();
+    store
+        .record_command("git status", now - 10, "/other", Some(0))
+        .unwrap();
 
     let context = SuggestionContext {
         cwd: Some("/proj".to_string()),
@@ -295,11 +324,15 @@ fn frecency_failed_command_ranks_lower() {
 
     // "git stash" always fails
     for i in 0..3 {
-        store.record_command("git stash", now - 10 + i, "/home", Some(1)).unwrap();
+        store
+            .record_command("git stash", now - 10 + i, "/home", Some(1))
+            .unwrap();
     }
     // "git status" always succeeds
     for i in 0..3 {
-        store.record_command("git status", now - 10 + i, "/home", Some(0)).unwrap();
+        store
+            .record_command("git status", now - 10 + i, "/home", Some(0))
+            .unwrap();
     }
 
     let context = SuggestionContext::default();
@@ -318,7 +351,9 @@ fn frecency_failed_command_still_returned_if_only_match() {
         .unwrap()
         .as_secs() as i64;
 
-    store.record_command("git stash", now - 10, "/home", Some(1)).unwrap();
+    store
+        .record_command("git stash", now - 10, "/home", Some(1))
+        .unwrap();
 
     let context = SuggestionContext::default();
     let result = store.suggest_ranked("git st", &context).unwrap();
@@ -331,7 +366,9 @@ fn frecency_empty_prefix_returns_none() {
     let db_path = tmp_dir.path().join("test.db");
     let store = HistoryStore::open(&db_path).unwrap();
 
-    store.record_command("git status", 1000, "/home", Some(0)).unwrap();
+    store
+        .record_command("git status", 1000, "/home", Some(0))
+        .unwrap();
 
     let context = SuggestionContext::default();
     let result = store.suggest_ranked("", &context).unwrap();
@@ -344,7 +381,9 @@ fn frecency_no_match_returns_none() {
     let db_path = tmp_dir.path().join("test.db");
     let store = HistoryStore::open(&db_path).unwrap();
 
-    store.record_command("git status", 1000, "/home", Some(0)).unwrap();
+    store
+        .record_command("git status", 1000, "/home", Some(0))
+        .unwrap();
 
     let context = SuggestionContext::default();
     let result = store.suggest_ranked("cargo ", &context).unwrap();

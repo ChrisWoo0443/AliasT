@@ -124,9 +124,7 @@ impl AiBackend for OllamaBackend {
             .send()
             .await
             .map_err(|_| {
-                AiError::Unavailable(
-                    "Ollama not running -- start with: ollama serve".to_string(),
-                )
+                AiError::Unavailable("Ollama not running -- start with: ollama serve".to_string())
             })?;
 
         if response.status().is_success() {

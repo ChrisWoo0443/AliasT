@@ -28,8 +28,10 @@ fn ollama_backend_name_returns_ollama() {
 
 #[tokio::test]
 async fn ollama_health_check_returns_unavailable_for_unreachable_server() {
-    let backend =
-        OllamaBackend::with_base_url("codellama".to_string(), "http://localhost:19999".to_string());
+    let backend = OllamaBackend::with_base_url(
+        "codellama".to_string(),
+        "http://localhost:19999".to_string(),
+    );
 
     let result = backend.health_check().await;
     assert!(result.is_err());
@@ -48,8 +50,10 @@ async fn ollama_health_check_returns_unavailable_for_unreachable_server() {
 
 #[tokio::test]
 async fn ollama_generate_returns_error_for_unreachable_server() {
-    let backend =
-        OllamaBackend::with_base_url("codellama".to_string(), "http://localhost:19999".to_string());
+    let backend = OllamaBackend::with_base_url(
+        "codellama".to_string(),
+        "http://localhost:19999".to_string(),
+    );
 
     let result = backend.generate("list files").await;
     assert!(result.is_err(), "Expected error for unreachable server");
@@ -99,13 +103,19 @@ fn system_prompt_mentions_exit_code() {
 
 #[test]
 fn claude_backend_name_returns_claude() {
-    let backend = ClaudeBackend::new("test-key".to_string(), "claude-sonnet-4-20250514".to_string());
+    let backend = ClaudeBackend::new(
+        "test-key".to_string(),
+        "claude-sonnet-4-20250514".to_string(),
+    );
     assert_eq!(backend.name(), "claude");
 }
 
 #[test]
 fn claude_backend_is_object_safe() {
-    let backend = ClaudeBackend::new("test-key".to_string(), "claude-sonnet-4-20250514".to_string());
+    let backend = ClaudeBackend::new(
+        "test-key".to_string(),
+        "claude-sonnet-4-20250514".to_string(),
+    );
     let boxed: Box<dyn AiBackend> = Box::new(backend);
     assert_eq!(boxed.name(), "claude");
 }
