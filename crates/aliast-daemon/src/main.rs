@@ -12,13 +12,7 @@ use aliast_core::ai::claude::ClaudeBackend;
 use aliast_core::ai::openai::OpenAiBackend;
 use aliast_core::ai::{AiBackend, ollama::OllamaBackend};
 use aliast_core::history::{HistoryStore, parse_history_file};
-use aliast_daemon::DaemonState;
-
-mod connection;
-mod doctor;
-mod lifecycle;
-pub mod migration;
-mod server;
+use aliast_daemon::{DaemonState, doctor, lifecycle, migration, server};
 
 const LONG_HELP: &str = "\
 AI Setup:
@@ -284,8 +278,16 @@ async fn main() -> Result<()> {
                 model_name: derived_model_name,
             };
 
-            let server_handle =
-                tokio::spawn(async move { server::run_server(&socket_path, state).await });
+            // Bind synchronously so a failed or duplicate bind exits non-zero
+            // here, instead of the error vanishing inside the spawned task --
+            // the shutdown select! below never observes the server task, so a
+            // failed bind would otherwise leave the process hanging as a silent
+            // orphan (holding the DB connection) that `aliast stop` cannot reach.
+            let listener = server::bind(&socket_path)?;
+
+            let server_handle = tokio::spawn(async move {
+                server::run_server_with_listener(listener, &socket_path, state).await
+            });
 
             // Wait for shutdown signals OR cancellation from IPC shutdown command
             let mut sigterm = signal(SignalKind::terminate())?;

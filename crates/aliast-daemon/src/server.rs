@@ -7,18 +7,28 @@ use crate::DaemonState;
 use crate::connection::handle_connection;
 use crate::lifecycle;
 
-/// Runs the daemon server, listening for connections on the given Unix socket path.
+/// Cleans up any stale socket and binds a Unix listener at `socket_path`.
 ///
-/// Cleans up any stale socket file before binding, then enters an accept loop.
-/// Each accepted connection is spawned as a separate tokio task. The server
-/// exits when the cancellation token is triggered, cleaning up the socket file.
-pub async fn run_server(socket_path: &Path, state: DaemonState) -> Result<()> {
+/// Returns an error if another daemon is already listening or the bind fails,
+/// so callers can propagate it (via `?`) and exit immediately instead of
+/// spawning a server task whose failure would otherwise go unobserved.
+pub fn bind(socket_path: &Path) -> Result<UnixListener> {
     lifecycle::cleanup_stale_socket(socket_path)?;
-
     let listener = UnixListener::bind(socket_path)?;
     tracing::info!("Listening on {:?}", socket_path);
     eprintln!("aliast: listening on {}", socket_path.display());
+    Ok(listener)
+}
 
+/// Runs the accept loop on an already-bound listener until cancellation.
+///
+/// Each accepted connection is spawned as a separate tokio task. The server
+/// exits when the cancellation token is triggered, removing the socket file.
+pub async fn run_server_with_listener(
+    listener: UnixListener,
+    socket_path: &Path,
+    state: DaemonState,
+) -> Result<()> {
     loop {
         tokio::select! {
             _ = state.cancel_token.cancelled() => {
@@ -47,4 +57,14 @@ pub async fn run_server(socket_path: &Path, state: DaemonState) -> Result<()> {
     lifecycle::remove_socket(socket_path);
     tracing::info!("Server stopped");
     Ok(())
+}
+
+/// Binds the socket and runs the accept loop until cancellation.
+///
+/// Convenience wrapper over [`bind`] + [`run_server_with_listener`]. Prefer
+/// calling those two directly when you need to observe bind errors before
+/// entering the async loop (e.g. to exit the process non-zero on a failed bind).
+pub async fn run_server(socket_path: &Path, state: DaemonState) -> Result<()> {
+    let listener = bind(socket_path)?;
+    run_server_with_listener(listener, socket_path, state).await
 }

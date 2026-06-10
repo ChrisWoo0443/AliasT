@@ -201,3 +201,32 @@ async fn server_shuts_down_on_cancellation_token() {
         "socket file should be removed after shutdown"
     );
 }
+
+#[tokio::test]
+async fn bind_succeeds_on_free_socket() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let socket_path = temp_dir.path().join("free.sock");
+
+    let listener = server::bind(&socket_path);
+
+    assert!(listener.is_ok(), "bind on a free socket should succeed");
+    assert!(socket_path.exists(), "socket file should exist after bind");
+}
+
+#[tokio::test]
+async fn bind_fails_when_another_daemon_is_already_listening() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let socket_path = temp_dir.path().join("busy.sock");
+
+    // Simulate a running daemon holding the socket.
+    let _first = server::bind(&socket_path).expect("first bind should succeed on a free socket");
+
+    // A second bind on the same path must surface an error so `aliast start`
+    // can exit non-zero, instead of the failure vanishing and the process hanging.
+    let second = server::bind(&socket_path);
+
+    assert!(
+        second.is_err(),
+        "second bind on an in-use socket must return Err, got Ok"
+    );
+}
