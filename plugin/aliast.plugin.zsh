@@ -24,6 +24,79 @@ typeset -g _ALIAST_NL_PROMPT=""           # Saved prompt for regeneration
 typeset -g _ALIAST_LAST_EXIT=""
 typeset -g _ALIAST_GIT_BRANCH=""
 
+# ── JSON helpers (pure -- no ZLE/I/O, unit-tested in tests/json_test.zsh) ──
+# Results are returned in $REPLY to avoid a subprocess fork on the per-keystroke
+# hot path (command substitution would fork a subshell every keystroke).
+
+# Escape a raw string for embedding as a JSON string value.
+_aliast_json_escape() {
+  local s="$1"
+  s="${s//\\/\\\\}"     # backslash -> \\
+  s="${s//\"/\\\"}"     # "         -> \"
+  s="${s//$'\n'/\\n}"   # newline   -> \n
+  s="${s//$'\r'/\\r}"   # CR        -> \r
+  s="${s//$'\t'/\\t}"   # tab       -> \t
+  REPLY="$s"
+}
+
+# Reverse _aliast_json_escape for a JSON-escaped string value.
+# Control chars are bound to locals because $'...' is taken literally in the
+# replacement half of ${x//pat/repl} inside double quotes (it only expands in
+# the pattern half).
+_aliast_json_unescape() {
+  local s="$1"
+  local sentinel=$'\x01' nl=$'\n' cr=$'\r' tab=$'\t'
+  s="${s//\\\\/$sentinel}"  # \\ -> sentinel (protect real backslashes first)
+  s="${s//\\\"/\"}"         # \" -> "
+  s="${s//\\n/$nl}"         # \n -> newline
+  s="${s//\\r/$cr}"         # \r -> CR
+  s="${s//\\t/$tab}"        # \t -> tab
+  s="${s//\\\//\/}"         # \/ -> /
+  s="${s//$sentinel/\\}"    # sentinel -> backslash
+  REPLY="$s"
+}
+
+# Extract the "type" field from a response line (value has no escapes).
+_aliast_response_type() { local r="${1##*\"type\":\"}"; REPLY="${r%%\"*}"; }
+
+# Extract the "id" field from a response line (value has no escapes).
+_aliast_response_id() { local r="${1##*\"id\":\"}"; REPLY="${r%%\"*}"; }
+
+# Extract and unescape the trailing "text" field (suggestion/command responses).
+# Responses are serde-internally-tagged, so "text" is always the final field.
+_aliast_response_text() {
+  local r="${1##*\"text\":\"}"
+  r="${r%\"\}}"
+  _aliast_json_unescape "$r"
+}
+
+# Extract and unescape the trailing "msg" field (error responses).
+_aliast_response_msg() {
+  local r="${1##*\"msg\":\"}"
+  r="${r%\"\}}"
+  _aliast_json_unescape "$r"
+}
+
+# Drain a socket fd until a response with the wanted id and type arrives,
+# discarding any stale/queued lines. Sets REPLY to the matched raw line and
+# returns 0, or clears REPLY and returns 1 on timeout/EOF. Fork-free: safe on
+# the per-keystroke hot path. This id match is what keeps ghost text from
+# desyncing when a prior read timed out and left a response buffered.
+_aliast_read_response() {
+  local fd="$1" want_id="$2" want_type="$3" timeout="${4:-0.1}" line=""
+  while read -r -u $fd -t $timeout line; do
+    _aliast_response_type "$line"
+    [[ "$REPLY" == "$want_type" ]] || continue
+    _aliast_response_id "$line"
+    if [[ "$REPLY" == "$want_id" ]]; then
+      REPLY="$line"
+      return 0
+    fi
+  done
+  REPLY=""
+  return 1
+}
+
 # ── 3. Connection management (lazy -- no I/O at plugin load time) ───
 _aliast_connect() {
   # Already connected
@@ -70,23 +143,26 @@ _aliast_reconnect() {
 
 # ── 4. Ghost text rendering ─────────────────────────────────────────
 
-# Resolve style preset to a highlight spec.
-# Priority: ALIAST_SUGGESTION_HIGHLIGHT (custom) > ALIAST_SUGGESTION_STYLE (preset) > default (dark)
+# Resolve the style preset to a highlight spec, cached in $_ALIAST_STYLE.
+# Priority: ALIAST_SUGGESTION_HIGHLIGHT (custom) > ALIAST_SUGGESTION_STYLE (preset) > default (dark).
+# Called at load and per-prompt (precmd), never per-keystroke, so rendering does
+# not fork a subshell on the hot path.
 _aliast_resolve_style() {
   # Custom override always wins
   if [[ -n "$ALIAST_SUGGESTION_HIGHLIGHT" ]]; then
-    echo "$ALIAST_SUGGESTION_HIGHLIGHT"
+    typeset -g _ALIAST_STYLE="$ALIAST_SUGGESTION_HIGHLIGHT"
     return
   fi
 
   # Named presets using hex colors (terminal-palette-independent)
   case "${ALIAST_SUGGESTION_STYLE:-dark}" in
-    dark)       echo "fg=#666666" ;;
-    light)      echo "fg=#999999" ;;
-    solarized)  echo "fg=#586e75" ;;
-    *)          echo "fg=#666666" ;;
+    dark)       typeset -g _ALIAST_STYLE="fg=#666666" ;;
+    light)      typeset -g _ALIAST_STYLE="fg=#999999" ;;
+    solarized)  typeset -g _ALIAST_STYLE="fg=#586e75" ;;
+    *)          typeset -g _ALIAST_STYLE="fg=#666666" ;;
   esac
 }
+_aliast_resolve_style   # resolve once at load; refreshed per-prompt in precmd
 
 _aliast_show_ghost() {
   local suggestion_text="$1"
@@ -98,8 +174,7 @@ _aliast_show_ghost() {
   if (( $#POSTDISPLAY > 0 )); then
     local start=$#BUFFER
     local end=$(( start + $#POSTDISPLAY ))
-    local style="$(_aliast_resolve_style)"
-    _ALIAST_HIGHLIGHT_ENTRY="${start} ${end} ${style} memo=aliast"
+    _ALIAST_HIGHLIGHT_ENTRY="${start} ${end} ${_ALIAST_STYLE} memo=aliast"
     region_highlight+=("$_ALIAST_HIGHLIGHT_ENTRY")
   fi
 }
@@ -116,20 +191,16 @@ _aliast_request_suggestion() {
   _aliast_connect || return
 
   (( _ALIAST_REQ_ID++ ))
+  local req_id="r${_ALIAST_REQ_ID}"
 
-  # Escape buffer for JSON
-  local escaped_buffer="${BUFFER//\\/\\\\}"
-  escaped_buffer="${escaped_buffer//\"/\\\"}"
-
-  local escaped_cwd="${PWD//\\/\\\\}"
-  escaped_cwd="${escaped_cwd//\"/\\\"}"
+  _aliast_json_escape "$BUFFER"; local escaped_buffer="$REPLY"
+  _aliast_json_escape "$PWD"; local escaped_cwd="$REPLY"
 
   # Git branch: use cached value from precmd (per D-05)
   local branch_field=""
   if [[ -n "$_ALIAST_GIT_BRANCH" ]]; then
-    local escaped_branch="${_ALIAST_GIT_BRANCH//\\/\\\\}"
-    escaped_branch="${escaped_branch//\"/\\\"}"
-    branch_field=",\"git_branch\":\"${escaped_branch}\""
+    _aliast_json_escape "$_ALIAST_GIT_BRANCH"
+    branch_field=",\"git_branch\":\"${REPLY}\""
   fi
 
   local exit_field=""
@@ -137,25 +208,21 @@ _aliast_request_suggestion() {
     exit_field=",\"exit_code\":${_ALIAST_LAST_EXIT}"
   fi
 
-  local msg="{\"id\":\"r${_ALIAST_REQ_ID}\",\"type\":\"complete\",\"buf\":\"${escaped_buffer}\",\"cur\":${CURSOR},\"cwd\":\"${escaped_cwd}\"${exit_field}${branch_field}}"
+  local msg="{\"id\":\"${req_id}\",\"type\":\"complete\",\"buf\":\"${escaped_buffer}\",\"cur\":${CURSOR},\"cwd\":\"${escaped_cwd}\"${exit_field}${branch_field}}"
 
   print -u $_ALIAST_FD "$msg" 2>/dev/null || {
     _aliast_reconnect
     return
   }
 
-  # Read response synchronously (with short timeout to avoid blocking)
-  local line=""
-  if read -r -u $_ALIAST_FD -t 0.1 line; then
-    if [[ "$line" == *'"type":"suggestion"'* ]]; then
-      local text="${line##*\"text\":\"}"
-      text="${text%%\"*}"
-
-      if [[ -n "$text" ]]; then
-        _aliast_show_ghost "$text"
-      else
-        _aliast_clear_ghost
-      fi
+  # Read the response for THIS request, discarding any stale line left buffered
+  # by a prior timed-out read (id matching prevents permanent ghost-text desync).
+  if _aliast_read_response "$_ALIAST_FD" "$req_id" "suggestion" 0.1; then
+    _aliast_response_text "$REPLY"
+    if [[ -n "$REPLY" ]]; then
+      _aliast_show_ghost "$REPLY"
+    else
+      _aliast_clear_ghost
     fi
   fi
 }
@@ -286,17 +353,12 @@ _aliast_nl_generate() {
     fi
 
     (( _ALIAST_REQ_ID++ ))
-    local escaped="${prompt//\\/\\\\}"
-    escaped="${escaped//\"/\\\"}"
-    escaped="${escaped//$'\n'/ }"
-
-    local escaped_cwd="${PWD//\\/\\\\}"
-    escaped_cwd="${escaped_cwd//\"/\\\"}"
+    _aliast_json_escape "$prompt"; local escaped="$REPLY"
+    _aliast_json_escape "$PWD"; local escaped_cwd="$REPLY"
     local branch_field=""
     if [[ -n "$_ALIAST_GIT_BRANCH" ]]; then
-      local escaped_branch="${_ALIAST_GIT_BRANCH//\\/\\\\}"
-      escaped_branch="${escaped_branch//\"/\\\"}"
-      branch_field=",\"git_branch\":\"${escaped_branch}\""
+      _aliast_json_escape "$_ALIAST_GIT_BRANCH"
+      branch_field=",\"git_branch\":\"${REPLY}\""
     fi
     local exit_field=""
     if [[ -n "$_ALIAST_LAST_EXIT" ]]; then
@@ -363,24 +425,21 @@ _aliast_nl_generate() {
     return
   fi
 
-  # Parse JSON response -- extract "text" field for command, "msg" field for error
-  if [[ "$result" == *'"type":"command"'* ]]; then
-    local command_text="${result##*\"text\":\"}"
-    command_text="${command_text%%\"*}"
-    # Unescape basic JSON escapes
-    command_text="${command_text//\\n/$'\n'}"
-    command_text="${command_text//\\\\/\\}"
-    command_text="${command_text//\\\"/\"}"
+  # Parse the JSON response robustly. No id match needed here: generate uses its
+  # own short-lived connection, so the single buffered line is this response.
+  _aliast_response_type "$result"
+  local resp_type="$REPLY"
+  if [[ "$resp_type" == "command" ]]; then
+    _aliast_response_text "$result"
     _aliast_nl_set_indicator
-    BUFFER="$command_text"
+    BUFFER="$REPLY"
     CURSOR=$#BUFFER
     _ALIAST_NL_STATE="review"
     zle -R
-  elif [[ "$result" == *'"type":"error"'* ]]; then
-    local error_msg="${result##*\"msg\":\"}"
-    error_msg="${error_msg%%\"*}"
+  elif [[ "$resp_type" == "error" ]]; then
+    _aliast_response_msg "$result"
     _aliast_nl_set_indicator
-    BUFFER="# ${error_msg}"
+    BUFFER="# ${REPLY}"
     CURSOR=$#BUFFER
     _ALIAST_NL_STATE="review"
     zle -R
@@ -440,6 +499,10 @@ _aliast_precmd_record() {
   typeset -g _ALIAST_GIT_BRANCH=""
   _ALIAST_GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
 
+  # Refresh the ghost-text style per prompt so config changes take effect without
+  # a reload, while keeping the per-keystroke render path fork-free.
+  _aliast_resolve_style
+
   # Get the most recent history entry number and command via fc
   local fc_out
   fc_out="$(fc -ln -1 2>/dev/null)" || return
@@ -453,20 +516,18 @@ _aliast_precmd_record() {
 
   _aliast_connect || return
 
-  # Escape for JSON
-  local escaped_cmd="${cmd//\\/\\\\}"
-  escaped_cmd="${escaped_cmd//\"/\\\"}"
-  local escaped_cwd="${PWD//\\/\\\\}"
-  escaped_cwd="${escaped_cwd//\"/\\\"}"
+  _aliast_json_escape "$cmd"; local escaped_cmd="$REPLY"
+  _aliast_json_escape "$PWD"; local escaped_cwd="$REPLY"
 
   (( _ALIAST_REQ_ID++ ))
-  local msg="{\"id\":\"r${_ALIAST_REQ_ID}\",\"type\":\"record\",\"cmd\":\"${escaped_cmd}\",\"cwd\":\"${escaped_cwd}\",\"exit_code\":${last_exit_code}}"
+  local req_id="r${_ALIAST_REQ_ID}"
+  local msg="{\"id\":\"${req_id}\",\"type\":\"record\",\"cmd\":\"${escaped_cmd}\",\"cwd\":\"${escaped_cwd}\",\"exit_code\":${last_exit_code}}"
 
-  # Send and read the Ack response to keep the socket buffer clean
-  # (stale Ack would confuse the next suggestion read)
+  # Send and drain the matching Ack to keep the socket buffer clean. Discarding
+  # any stale suggestion line here stops it from being mistaken for this ack (and
+  # stops the ack from polluting the next suggestion read).
   print -u $_ALIAST_FD "$msg" 2>/dev/null || { _aliast_reconnect; return }
-  local ack=""
-  read -r -u $_ALIAST_FD -t 0.2 ack 2>/dev/null
+  _aliast_read_response "$_ALIAST_FD" "$req_id" "ack" 0.2
 }
 
 autoload -Uz add-zsh-hook

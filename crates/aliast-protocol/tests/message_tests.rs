@@ -59,6 +59,44 @@ fn serialize_error_response() {
 }
 
 #[test]
+fn payload_field_is_last_and_escaped_for_plugin_parsing() {
+    // The zsh plugin extracts the trailing "text"/"msg" field by stripping the
+    // closing `"}` and unescaping. That contract requires the payload field to be
+    // serialized last and embedded quotes/backslashes to be JSON-escaped. If the
+    // field order ever changes, this test fails loudly instead of the plugin
+    // silently corrupting suggestions.
+    let suggestion = serde_json::to_string(&Response::Suggestion {
+        id: "r1".to_string(),
+        text: "git commit -m \"fix\"".to_string(),
+    })
+    .unwrap();
+    assert!(
+        suggestion.ends_with(r#""text":"git commit -m \"fix\""}"#),
+        "suggestion text must be the final, escaped field: {suggestion}"
+    );
+
+    let command = serde_json::to_string(&Response::Command {
+        id: "r2".to_string(),
+        text: "echo \\ hi".to_string(),
+    })
+    .unwrap();
+    assert!(
+        command.ends_with(r#""text":"echo \\ hi"}"#),
+        "command text must be the final, escaped field: {command}"
+    );
+
+    let error = serde_json::to_string(&Response::Error {
+        id: "r3".to_string(),
+        msg: "bad \"thing\"".to_string(),
+    })
+    .unwrap();
+    assert!(
+        error.ends_with(r#""msg":"bad \"thing\""}"#),
+        "error msg must be the final, escaped field: {error}"
+    );
+}
+
+#[test]
 fn roundtrip_request() {
     let request = Request::Complete {
         id: "r1".to_string(),
