@@ -11,7 +11,7 @@ use tracing_subscriber::EnvFilter;
 use aliast_core::ai::claude::ClaudeBackend;
 use aliast_core::ai::openai::OpenAiBackend;
 use aliast_core::ai::{AiBackend, ollama::OllamaBackend};
-use aliast_core::history::{HistoryStore, parse_history_file};
+use aliast_core::history::{HistoryStore, parse_history_bytes};
 use aliast_daemon::{DaemonState, doctor, lifecycle, migration, server};
 
 const LONG_HELP: &str = "\
@@ -131,6 +131,13 @@ fn init_tracing() -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Restrict every file this daemon creates (log, history db + WAL/SHM sidecars,
+    // socket) to the owner. Shell history and suggestions are private data.
+    #[cfg(unix)]
+    unsafe {
+        libc::umask(0o077);
+    }
+
     // Migrate data files from old alias/ to new aliast/ directory (best-effort, silent)
     let old_data_dir = directories::BaseDirs::new()
         .map(|dirs| dirs.data_local_dir().join("alias"))
@@ -182,9 +189,9 @@ async fn main() -> Result<()> {
                 let home = std::env::var("HOME").unwrap_or_default();
                 let zsh_history_path = PathBuf::from(&home).join(".zsh_history");
                 if zsh_history_path.exists() {
-                    match std::fs::read_to_string(&zsh_history_path) {
-                        Ok(content) => {
-                            let mut entries = parse_history_file(&content);
+                    match std::fs::read(&zsh_history_path) {
+                        Ok(bytes) => {
+                            let mut entries = parse_history_bytes(&bytes);
                             // Assign synthetic timestamps to entries missing them
                             for (index, entry) in entries.iter_mut().enumerate() {
                                 if entry.timestamp.is_none() {

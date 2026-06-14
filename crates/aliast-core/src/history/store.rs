@@ -20,6 +20,22 @@ impl HistoryStore {
              PRAGMA case_sensitive_like=ON;",
         )?;
 
+        // Restrict the database and its WAL/SHM sidecars to the owner: shell
+        // history routinely contains secrets and must not be world-readable.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            for suffix in ["", "-wal", "-shm"] {
+                let mut os_path = path.as_os_str().to_os_string();
+                os_path.push(suffix);
+                let sidecar = std::path::PathBuf::from(os_path);
+                if sidecar.exists() {
+                    let _ =
+                        std::fs::set_permissions(&sidecar, std::fs::Permissions::from_mode(0o600));
+                }
+            }
+        }
+
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS history (
                 id        INTEGER PRIMARY KEY AUTOINCREMENT,

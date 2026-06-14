@@ -134,7 +134,10 @@ async fn dispatch_request(request: Request, state: &DaemonState) -> Response {
                     text: String::new(),
                 };
             }
-            let store_guard = state.store.lock().unwrap();
+            let store_guard = state
+                .store
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             let context = SuggestionContext {
                 cwd,
                 exit_code,
@@ -153,11 +156,17 @@ async fn dispatch_request(request: Request, state: &DaemonState) -> Response {
             cwd,
             exit_code,
         } => {
-            let store_guard = state.store.lock().unwrap();
+            // Compute the timestamp before locking so nothing fallible runs while
+            // the guard is held (a panic under the lock would poison it for the
+            // daemon's lifetime); recover the guard even if it was poisoned.
             let timestamp = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_default()
                 .as_secs() as i64;
+            let store_guard = state
+                .store
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             if let Err(err) = store_guard.record_command(&cmd, timestamp, &cwd, exit_code) {
                 tracing::error!("Failed to record command: {err}");
             }

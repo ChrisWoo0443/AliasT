@@ -7,6 +7,38 @@ pub struct HistoryEntry {
     pub timestamp: Option<i64>,
 }
 
+/// Parses raw zsh history file bytes into a list of history entries.
+///
+/// zsh stores history in a "metafied" encoding: bytes that collide with its
+/// internal token range are written as a Meta byte (0x83) followed by the
+/// original byte XOR 0x20 (so a UTF-8 emoji or box-drawing char produces stray
+/// 0x83 bytes on disk). Reading such a file as UTF-8 fails, which previously
+/// aborted the entire first-run import. This de-metafies first, then decodes
+/// lossily so a single bad byte cannot discard the whole history.
+pub fn parse_history_bytes(bytes: &[u8]) -> Vec<HistoryEntry> {
+    let unmetafied = unmetafy(bytes);
+    let decoded = String::from_utf8_lossy(&unmetafied);
+    parse_history_file(&decoded)
+}
+
+/// Reverses zsh's history metafication (see `parse_history_bytes`).
+fn unmetafy(bytes: &[u8]) -> Vec<u8> {
+    const META: u8 = 0x83;
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut iter = bytes.iter().copied();
+    while let Some(byte) = iter.next() {
+        if byte == META {
+            // The next byte was stored XOR 0x20; a trailing lone Meta is dropped.
+            if let Some(escaped) = iter.next() {
+                out.push(escaped ^ 0x20);
+            }
+        } else {
+            out.push(byte);
+        }
+    }
+    out
+}
+
 /// Parses zsh history file content into a list of history entries.
 ///
 /// Handles both plain format and EXTENDED_HISTORY format (`: timestamp:duration;command`),
