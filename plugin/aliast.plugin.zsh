@@ -369,7 +369,9 @@ _aliast_nl_generate() {
     print -u $bg_fd "$msg" 2>/dev/null || { echo "error:send" > "$tmpfile"; exec {bg_fd}>&-; exit 1; }
 
     local line=""
-    read -r -u $bg_fd -t 30 line 2>/dev/null || { echo "error:timeout" > "$tmpfile"; exec {bg_fd}>&-; exit 1; }
+    # Longer than the daemon's backend timeout (30s) so a slow generation surfaces
+    # the daemon's specific error rather than this generic client-side timeout.
+    read -r -u $bg_fd -t 35 line 2>/dev/null || { echo "error:timeout" > "$tmpfile"; exec {bg_fd}>&-; exit 1; }
     echo "$line" > "$tmpfile"
     exec {bg_fd}>&-
   } &

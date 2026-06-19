@@ -106,10 +106,10 @@ impl AiBackend for ClaudeBackend {
         let text = claude_response
             .content
             .first()
-            .map(|block| block.text.trim().to_string())
+            .map(|block| block.text.as_str())
             .unwrap_or_default();
 
-        Ok(text)
+        super::sanitize_command(text)
     }
 
     async fn health_check(&self) -> Result<(), AiError> {

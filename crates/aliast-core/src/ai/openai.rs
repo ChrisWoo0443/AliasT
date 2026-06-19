@@ -9,7 +9,9 @@ use super::{AiBackend, AiError};
 #[derive(serde::Serialize)]
 struct OpenAiRequest {
     model: String,
-    max_tokens: u32,
+    // Newer OpenAI models (o-series and later) reject the legacy `max_tokens`
+    // field with a 400; `max_completion_tokens` is the current, forward-compatible name.
+    max_completion_tokens: u32,
     messages: Vec<OpenAiMessage>,
 }
 
@@ -73,7 +75,7 @@ impl AiBackend for OpenAiBackend {
     async fn generate(&self, prompt: &str) -> Result<String, AiError> {
         let request_body = OpenAiRequest {
             model: self.model.clone(),
-            max_tokens: 1024,
+            max_completion_tokens: 1024,
             messages: vec![
                 OpenAiMessage {
                     role: "system".to_string(),
@@ -113,10 +115,10 @@ impl AiBackend for OpenAiBackend {
         let text = openai_response
             .choices
             .first()
-            .map(|choice| choice.message.content.trim().to_string())
+            .map(|choice| choice.message.content.as_str())
             .unwrap_or_default();
 
-        Ok(text)
+        super::sanitize_command(text)
     }
 
     async fn health_check(&self) -> Result<(), AiError> {
@@ -127,7 +129,7 @@ impl AiBackend for OpenAiBackend {
 
         let request_body = OpenAiRequest {
             model: self.model.clone(),
-            max_tokens: 1,
+            max_completion_tokens: 1,
             messages: vec![OpenAiMessage {
                 role: "system".to_string(),
                 content: "hi".to_string(),
