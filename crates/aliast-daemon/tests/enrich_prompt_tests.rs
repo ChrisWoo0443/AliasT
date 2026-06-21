@@ -39,6 +39,21 @@ fn enrich_prompt_no_context_returns_original() {
 }
 
 #[test]
+fn enrich_prompt_delimits_context_as_read_only_data() {
+    // A crafted branch/path must be clearly fenced and labeled as data so it is
+    // harder to read as instructions (defense-in-depth with the system prompt).
+    let result = enrich_prompt("do it", Some("/proj"), None, Some("feature/x"));
+    assert!(result.contains("[End Context]"), "got {result}");
+    let lower = result.to_lowercase();
+    assert!(
+        lower.contains("read-only") || lower.contains("not instructions"),
+        "context block should be labeled as data: {result}"
+    );
+    // The user's actual prompt still follows the context block.
+    assert!(result.trim_end().ends_with("do it"), "got {result}");
+}
+
+#[test]
 fn enrich_prompt_with_all_context() {
     let result = enrich_prompt("pull latest", Some("/proj"), Some(1), Some("main"));
     assert!(result.contains("[Context]"));

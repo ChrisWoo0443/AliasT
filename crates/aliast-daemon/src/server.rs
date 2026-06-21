@@ -15,6 +15,16 @@ use crate::lifecycle;
 pub fn bind(socket_path: &Path) -> Result<UnixListener> {
     lifecycle::cleanup_stale_socket(socket_path)?;
     let listener = UnixListener::bind(socket_path)?;
+
+    // Restrict the socket to the owner so no other local user can connect (and
+    // read suggestions, spend the API budget, or shut the daemon down). Belt and
+    // suspenders alongside the 0700 parent directory and the process umask.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(socket_path, std::fs::Permissions::from_mode(0o600));
+    }
+
     tracing::info!("Listening on {:?}", socket_path);
     eprintln!("aliast: listening on {}", socket_path.display());
     Ok(listener)
@@ -47,7 +57,10 @@ pub async fn run_server_with_listener(
                         });
                     }
                     Err(err) => {
+                        // Back off briefly so a persistent accept error (e.g. fd
+                        // exhaustion) does not spin the loop at 100% CPU.
                         tracing::error!("Failed to accept connection: {err}");
+                        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
                     }
                 }
             }

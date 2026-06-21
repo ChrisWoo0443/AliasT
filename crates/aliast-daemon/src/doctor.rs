@@ -52,12 +52,14 @@ pub fn print_doctor_report(checks: &[DoctorCheck]) {
     let total_count = checks.len();
     println!("{}/{} checks passed", passed_count, total_count);
 
-    if passed_count < total_count {
-        println!();
-        println!("Note: Doctor reads env vars from the current shell session.");
-        println!("The running daemon may have different values if it was started");
-        println!("in a different shell or with different environment variables.");
-    }
+    // Always show this: the most confusing case is all checks passing (shell env
+    // is correct) while the long-lived daemon was started earlier with a stale
+    // environment, so `aliast status` and NL mode disagree with this report.
+    println!();
+    println!("Note: Doctor reads env vars from the current shell session.");
+    println!("The running daemon may have different values if it was started");
+    println!("in a different shell or before these variables were set --");
+    println!("run `aliast stop && aliast start` after changing ALIAST_NL_* vars.");
 }
 
 /// Check 1: Daemon running -- probe socket with sync UnixStream.
@@ -186,7 +188,7 @@ pub fn check_api_key_present_with(
     }
 }
 
-/// Check 4: Ollama reachable -- HTTP GET to localhost:11434.
+/// Check 4: Ollama reachable AND the configured model is actually pulled.
 async fn check_ollama_reachable() -> DoctorCheck {
     let backend = std::env::var("ALIAST_NL_BACKEND").unwrap_or_else(|_| "ollama".to_string());
 
@@ -199,24 +201,57 @@ async fn check_ollama_reachable() -> DoctorCheck {
         };
     }
 
+    let model = std::env::var("ALIAST_NL_MODEL").unwrap_or_default();
+    check_ollama_at("http://localhost:11434", &model).await
+}
+
+/// Testable variant: verifies Ollama is reachable at `base_url` and that `model`
+/// (if set) appears in `/api/tags`, so `aliast doctor` no longer reports a
+/// healthy setup when the configured model was never pulled.
+pub async fn check_ollama_at(base_url: &str, model: &str) -> DoctorCheck {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(3))
         .build()
         .unwrap();
 
-    match client.get("http://localhost:11434/").send().await {
-        Ok(response) if response.status().is_success() => DoctorCheck {
+    let response = match client.get(format!("{base_url}/api/tags")).send().await {
+        Ok(response) if response.status().is_success() => response,
+        _ => {
+            return DoctorCheck {
+                name: "Ollama reachable",
+                passed: false,
+                detail: "Cannot reach Ollama at localhost:11434".to_string(),
+                fix: Some("Start Ollama with: ollama serve".to_string()),
+            };
+        }
+    };
+
+    if model.is_empty() {
+        return DoctorCheck {
             name: "Ollama reachable",
             passed: true,
-            detail: "Ollama is running at localhost:11434".to_string(),
+            detail: "Ollama is running (no model set to verify)".to_string(),
             fix: None,
-        },
-        _ => DoctorCheck {
+        };
+    }
+
+    // /api/tags returns {"models":[{"name":"llama3.2:latest",...}]}. The user's
+    // ALIAST_NL_MODEL (e.g. "llama3.2") is the name before the optional ":tag".
+    let body = response.text().await.unwrap_or_default();
+    if body.contains(&format!("\"{model}")) {
+        DoctorCheck {
+            name: "Ollama reachable",
+            passed: true,
+            detail: format!("Ollama is running; model '{model}' is available"),
+            fix: None,
+        }
+    } else {
+        DoctorCheck {
             name: "Ollama reachable",
             passed: false,
-            detail: "Cannot reach Ollama at localhost:11434".to_string(),
-            fix: Some("Start Ollama with: ollama serve".to_string()),
-        },
+            detail: format!("Ollama is running but model '{model}' is not pulled"),
+            fix: Some(format!("Pull the model with: ollama pull {model}")),
+        }
     }
 }
 

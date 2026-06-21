@@ -213,6 +213,27 @@ async fn bind_succeeds_on_free_socket() {
     assert!(socket_path.exists(), "socket file should exist after bind");
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn bind_creates_an_owner_only_socket() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp_dir = tempfile::tempdir().unwrap();
+    let socket_path = temp_dir.path().join("perm.sock");
+
+    let _listener = server::bind(&socket_path).unwrap();
+
+    let mode = std::fs::metadata(&socket_path)
+        .unwrap()
+        .permissions()
+        .mode();
+    assert_eq!(
+        mode & 0o077,
+        0,
+        "socket must not be group/other accessible, got {:o}",
+        mode
+    );
+}
+
 #[tokio::test]
 async fn bind_fails_when_another_daemon_is_already_listening() {
     let temp_dir = tempfile::tempdir().unwrap();
