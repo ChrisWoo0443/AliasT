@@ -14,24 +14,25 @@ pub fn suggest(store: &HistoryStore, buffer: &str, context: &SuggestionContext) 
         return None;
     }
 
-    // Try frecency-ranked suggestion first
-    if let Ok(Some(full_command)) = store.suggest_ranked(buffer, context) {
-        let suffix = &full_command[buffer.len()..];
-        if !suffix.is_empty() {
-            return Some(suffix.to_string());
-        }
-    }
-
-    // Fall back to simple prefix match
-    match store.suggest_prefix(buffer) {
+    // Try frecency-ranked suggestion first.
+    match store.suggest_ranked(buffer, context) {
         Ok(Some(full_command)) => {
-            let suffix = &full_command[buffer.len()..];
-            if suffix.is_empty() {
-                None
-            } else {
-                Some(suffix.to_string())
-            }
+            // An empty suffix means the top-ranked command is exactly what the
+            // user typed -- there is nothing to complete. Do NOT fall back to the
+            // raw-recency prefix match, which could surface a rarely-used longer
+            // command purely because it was used more recently.
+            full_command
+                .strip_prefix(buffer)
+                .filter(|suffix| !suffix.is_empty())
+                .map(str::to_string)
         }
-        _ => None,
+        // No ranked match at all: fall back to a simple prefix match.
+        _ => match store.suggest_prefix(buffer) {
+            Ok(Some(full_command)) => full_command
+                .strip_prefix(buffer)
+                .filter(|suffix| !suffix.is_empty())
+                .map(str::to_string),
+            _ => None,
+        },
     }
 }

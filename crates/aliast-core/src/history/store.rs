@@ -2,6 +2,10 @@ use super::{HistoryEntry, SuggestionContext};
 use rusqlite::Connection;
 use std::path::Path;
 
+/// Maximum number of history rows to retain. Bounds disk and query growth while
+/// preserving enough history for meaningful frecency ranking. Enforced at open().
+const MAX_HISTORY_ENTRIES: i64 = 100_000;
+
 /// SQLite-backed command history store for prefix-based suggestion lookups.
 pub struct HistoryStore {
     conn: Connection,
@@ -64,7 +68,22 @@ impl HistoryStore {
             conn.execute_batch("PRAGMA user_version = 1;")?;
         }
 
-        Ok(Self { conn })
+        let store = Self { conn };
+        store.prune(MAX_HISTORY_ENTRIES)?;
+        Ok(store)
+    }
+
+    /// Deletes all but the most recent `max_entries` rows (by insertion order),
+    /// bounding unbounded history growth.
+    pub fn prune(&self, max_entries: i64) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "DELETE FROM history
+             WHERE id NOT IN (
+                 SELECT id FROM history ORDER BY id DESC LIMIT ?1
+             )",
+            rusqlite::params![max_entries],
+        )?;
+        Ok(())
     }
 
     /// Records a single command execution into the history store.
@@ -115,11 +134,12 @@ impl HistoryStore {
     /// Returns the top frecency-ranked command matching the given prefix,
     /// considering recency, frequency, directory affinity, and exit code.
     ///
-    /// Scoring:
+    /// Scoring (frequency is weighted to stay competitive with recency, and the
+    /// failure penalty is strong enough to actually demote a failing command):
     /// - Recency: last hour=100, today=80, this week=60, this month=40, older=20
-    /// - Frequency: >=50 uses=30, >=10=20, >=5=15, >=2=10, else=5
+    /// - Frequency: >=50 uses=50, >=10=35, >=5=25, >=2=15, else=5
     /// - Directory bonus: +20 if any execution was in context.cwd
-    /// - Exit code penalty: -15 if majority of executions failed
+    /// - Exit code penalty: -40 if majority of executions failed
     pub fn suggest_ranked(
         &self,
         prefix: &str,
@@ -154,10 +174,10 @@ impl HistoryStore {
                     END AS recency_score,
                     -- Frequency score
                     CASE
-                        WHEN COUNT(*) >= 50 THEN 30
-                        WHEN COUNT(*) >= 10 THEN 20
-                        WHEN COUNT(*) >= 5 THEN 15
-                        WHEN COUNT(*) >= 2 THEN 10
+                        WHEN COUNT(*) >= 50 THEN 50
+                        WHEN COUNT(*) >= 10 THEN 35
+                        WHEN COUNT(*) >= 5 THEN 25
+                        WHEN COUNT(*) >= 2 THEN 15
                         ELSE 5
                     END AS frequency_score,
                     -- Directory bonus: +20 if any execution was in context cwd
@@ -167,7 +187,7 @@ impl HistoryStore {
                     END AS directory_bonus,
                     -- Exit code penalty: -15 if majority of executions failed
                     CASE
-                        WHEN SUM(CASE WHEN exit_code IS NOT NULL AND exit_code != 0 THEN 1 ELSE 0 END) * 2 > COUNT(CASE WHEN exit_code IS NOT NULL THEN 1 END) THEN -15
+                        WHEN SUM(CASE WHEN exit_code IS NOT NULL AND exit_code != 0 THEN 1 ELSE 0 END) * 2 > COUNT(CASE WHEN exit_code IS NOT NULL THEN 1 END) THEN -40
                         ELSE 0
                     END AS exit_penalty
              FROM history
