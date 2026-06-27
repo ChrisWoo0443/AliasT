@@ -20,6 +20,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Verify tag matches workspace version
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          tag="${TAG_NAME#v}"
+          version=$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
+          if [ "$tag" != "$version" ]; then
+            echo "Tag $TAG_NAME does not match workspace version $version" >&2
+            exit 1
+          fi
+
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
@@ -27,10 +38,22 @@ jobs:
           key: ${{ matrix.target }}
 
       - name: Build
-        run: cargo build --release -p aliast-daemon  # -p uses package name (not binary name)
+        run: cargo build --release --locked -p aliast-daemon  # -p uses package name (not binary name)
 
       - name: Verify binary architecture
-        run: file target/release/aliast
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          file target/release/aliast
+          case "$TARGET" in
+            aarch64-apple-darwin) expected=arm64 ;;
+            x86_64-apple-darwin) expected=x86_64 ;;
+            *) echo "unknown target $TARGET" >&2; exit 1 ;;
+          esac
+          if ! file target/release/aliast | grep -q "$expected"; then
+            echo "Binary architecture does not match $TARGET (expected $expected)" >&2
+            exit 1
+          fi
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
@@ -52,12 +75,13 @@ jobs:
         run: |
           mkdir -p release
 
+          # Bundle the binary and the zsh plugin together in each versioned
+          # tarball so the formula needs a single download + checksum per arch.
           for arch in aarch64-apple-darwin x86_64-apple-darwin; do
+            cp plugin/aliast.plugin.zsh "artifacts/aliast-${arch}/"
             tar -czf "release/aliast-${arch}.tar.gz" \
-              -C "artifacts/aliast-${arch}" aliast
+              -C "artifacts/aliast-${arch}" aliast aliast.plugin.zsh
           done
-
-          cp plugin/aliast.plugin.zsh release/
 
           cd release
           sha256sum * > SHA256SUMS

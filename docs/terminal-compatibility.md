@@ -4,13 +4,21 @@ Ghost text rendering compatibility across macOS terminals.
 
 ## Test Matrix
 
-| Terminal      | Version | Tested | Ghost Text Visible | Style Presets Work | Quirks/Notes       |
-|---------------|---------|--------|--------------------|--------------------|--------------------|
-| Terminal.app  |         | Yes    | Yes                | Not yet tested     |                    |
-| iTerm2        |         | Yes    | Yes                | Not yet tested     |                    |
-| Kitty         |         | Yes    | Yes                | Not yet tested     |                    |
-| Ghostty       |         | No     | Not yet tested     | Not yet tested     |                    |
-| Alacritty     |         | No     | Not yet tested     | Not yet tested     |                    |
+"Verified" below means the item was manually checked; "Not tested" is unverified
+(no known problem, just not exercised yet). So far only **ghost-text visibility**
+has been verified -- style presets and the Ctrl+Space NL toggle are still unverified.
+
+| Terminal      | Ghost Text Visible | Style Presets | NL Toggle (Ctrl+Space) |
+|---------------|--------------------|---------------|------------------------|
+| Terminal.app  | Verified           | Not tested    | Not tested             |
+| iTerm2        | Verified           | Not tested    | Not tested             |
+| Kitty         | Verified           | Not tested    | Not tested             |
+| Ghostty       | Not tested         | Not tested    | Not tested             |
+| Alacritty     | Not tested         | Not tested    | Not tested             |
+
+> **Ctrl+Space caveat:** NL mode is bound to Ctrl+Space (NUL), which some terminals
+> do not emit. If it does nothing in your terminal, rebind it in `~/.zshrc` after
+> sourcing the plugin, e.g. `bindkey '^G' _aliast_nl_toggle`.
 
 ## Installation
 
@@ -72,8 +80,9 @@ ALIAST_SUGGESTION_HIGHLIGHT="fg=red" source plugin/aliast.plugin.zsh
 
 ## Test Results
 
-_To be filled in after testing._
+Ghost-text rendering verified in Terminal.app, iTerm2, and Kitty. Style presets
+and the Ctrl+Space NL toggle have not yet been verified in any terminal.
 
 ## Known Quirks
 
-_To be filled in after testing._
+- Ctrl+Space (NUL) is not emitted by every terminal; see the caveat above.

@@ -193,8 +193,16 @@ async fn dispatch_request(request: Request, state: &DaemonState) -> Response {
             }
             match &state.ai_backend {
                 Some(backend) => {
-                    let enriched =
-                        enrich_prompt(&prompt, cwd.as_deref(), exit_code, git_branch.as_deref());
+                    // Opt out of sending cwd/git-branch/exit-code context to the
+                    // cloud provider by setting ALIAST_NL_NO_CONTEXT.
+                    let no_context = std::env::var("ALIAST_NL_NO_CONTEXT")
+                        .map(|value| !value.is_empty())
+                        .unwrap_or(false);
+                    let enriched = if no_context {
+                        prompt.clone()
+                    } else {
+                        enrich_prompt(&prompt, cwd.as_deref(), exit_code, git_branch.as_deref())
+                    };
                     match backend.generate(&enriched).await {
                         Ok(command_text) => Response::Command {
                             id,

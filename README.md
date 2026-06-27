@@ -55,11 +55,13 @@ export ALIAST_OPENAI_KEY=sk-...
 
 Run `aliast doctor` to verify your setup.
 
+> **Note:** The daemon reads these variables once at startup. After changing any `ALIAST_NL_*` variable, run `aliast stop && aliast start` (or open a new terminal) for it to take effect.
+
 ## Usage
 
 ### Ghost Text
 
-Start typing a command. Suggestions appear as dimmed text after your cursor. Press **Tab** to accept.
+Start typing a command. Suggestions appear as dimmed text after your cursor. Press **Tab** to accept the whole suggestion, or **Shift+Tab** to accept just the next word.
 
 ### Natural Language Mode
 
@@ -80,7 +82,7 @@ aliast doctor    Run diagnostic health checks
 
 A Rust daemon runs in the background, serving suggestions over a Unix socket. The zsh plugin connects to the daemon on first keystroke, renders ghost text via `POSTDISPLAY`, and handles the NL mode UI.
 
-Suggestions are ranked by frecency -- frequency, recency, directory, and exit code all factor in. History stays local. Cloud API calls only happen in NL mode when you explicitly trigger them.
+Suggestions are ranked by frecency -- frequency, recency, directory, and exit code all factor in. History stays local. Cloud API calls only happen in NL mode when you explicitly trigger them -- and only your prompt plus a small context block (current directory, git branch, and last exit code) is sent. Set `ALIAST_NL_NO_CONTEXT=1` to send only the prompt.
 
 ## Environment Variables
 
@@ -90,6 +92,7 @@ Suggestions are ranked by frecency -- frequency, recency, directory, and exit co
 | `ALIAST_NL_BACKEND` | Backend: `ollama`, `claude`, `openai` | `ollama` |
 | `ALIAST_ANTHROPIC_KEY` | API key for Claude | |
 | `ALIAST_OPENAI_KEY` | API key for OpenAI | |
+| `ALIAST_NL_NO_CONTEXT` | Send only the prompt to the AI (omit cwd/branch/exit code) | (unset) |
 | `ALIAST_SUGGESTION_STYLE` | Ghost text style: `dark`, `light`, `solarized` | `dark` |
 | `ALIAST_SUGGESTION_HIGHLIGHT` | Custom highlight spec (overrides style) | |
 | `ALIAST_LOG_LEVEL` | Daemon log level | `warn` |

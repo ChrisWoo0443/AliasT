@@ -4,3 +4,5 @@ members = ["crates/aliast-daemon", "crates/aliast-protocol", "crates/aliast-core
 
 [workspace.package]
 version = "1.2.0"
+# edition 2024 needs >=1.85; let-chains (used in the daemon) need >=1.88.
+rust-version = "1.88"

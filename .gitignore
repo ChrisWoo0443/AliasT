@@ -1,6 +1,7 @@
 /target/
 .env
 *.db
+.DS_Store
 .claude/
 .planning/
 CLAUDE.md
