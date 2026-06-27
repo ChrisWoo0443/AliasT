@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
@@ -51,17 +51,19 @@ AI Setup:
 struct Cli {
     #[command(subcommand)]
     command: Commands,
+
+    /// Path to the Unix domain socket (defaults to the XDG/tmp runtime path).
+    /// Applies to every subcommand so control commands can reach a daemon
+    /// started on a non-default socket.
+    #[arg(long, global = true)]
+    socket: Option<PathBuf>,
 }
 
 /// Available daemon subcommands.
 #[derive(Subcommand)]
 enum Commands {
     /// Start the daemon, listening on the specified socket path.
-    Start {
-        /// Path to the Unix domain socket.
-        #[arg(long)]
-        socket: Option<PathBuf>,
-    },
+    Start,
     /// Stop a running daemon.
     Stop,
     /// Check daemon status.
@@ -80,9 +82,8 @@ enum Commands {
 /// Log level is controlled by `ALIAST_LOG_LEVEL` env var, defaulting to `warn`.
 /// Send an NDJSON request to the daemon and read the response.
 /// Uses sync UnixStream -- no tokio runtime needed.
-fn send_ipc_request(request_json: &str) -> Result<String> {
-    let socket_path = lifecycle::default_socket_path();
-    let stream = std::os::unix::net::UnixStream::connect(&socket_path)
+fn send_ipc_request(socket_path: &Path, request_json: &str) -> Result<String> {
+    let stream = std::os::unix::net::UnixStream::connect(socket_path)
         .map_err(|_| anyhow::anyhow!("aliast: daemon is not running"))?;
     stream.set_read_timeout(Some(std::time::Duration::from_secs(5)))?;
 
@@ -163,9 +164,10 @@ async fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
+    let socket_path = cli.socket.unwrap_or_else(lifecycle::default_socket_path);
+
     match cli.command {
-        Commands::Start { socket } => {
-            let socket_path = socket.unwrap_or_else(lifecycle::default_socket_path);
+        Commands::Start => {
             tracing::info!(?socket_path, "starting daemon");
 
             // Initialize HistoryStore at ~/.local/share/aliast/history.db
@@ -319,23 +321,24 @@ async fn main() -> Result<()> {
 
             tracing::info!("Daemon stopped cleanly");
         }
-        Commands::Stop => match send_ipc_request(r#"{"id":"stop-1","type":"shutdown"}"#) {
-            Ok(response) => {
-                if response.contains("\"shutting_down\"") {
-                    println!("aliast: daemon stopped");
-                } else {
-                    eprintln!("aliast: unexpected response from daemon");
+        Commands::Stop => {
+            match send_ipc_request(&socket_path, r#"{"id":"stop-1","type":"shutdown"}"#) {
+                Ok(response) => {
+                    if response.contains("\"shutting_down\"") {
+                        println!("aliast: daemon stopped");
+                    } else {
+                        eprintln!("aliast: unexpected response from daemon");
+                        std::process::exit(1);
+                    }
+                }
+                Err(err) => {
+                    eprintln!("{}", err);
                     std::process::exit(1);
                 }
             }
-            Err(err) => {
-                eprintln!("{}", err);
-                std::process::exit(1);
-            }
-        },
+        }
         Commands::Status => {
-            let socket_path = lifecycle::default_socket_path();
-            match send_ipc_request(r#"{"id":"status-1","type":"get_status"}"#) {
+            match send_ipc_request(&socket_path, r#"{"id":"status-1","type":"get_status"}"#) {
                 Ok(response) => {
                     if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&response) {
                         if parsed["type"] == "status" {
@@ -364,7 +367,7 @@ async fn main() -> Result<()> {
                 }
             }
         }
-        Commands::On => match send_ipc_request(r#"{"id":"on-1","type":"enable"}"#) {
+        Commands::On => match send_ipc_request(&socket_path, r#"{"id":"on-1","type":"enable"}"#) {
             Ok(response) => {
                 if response.contains("\"ack\"") {
                     println!("aliast: suggestions enabled");
@@ -378,7 +381,8 @@ async fn main() -> Result<()> {
                 std::process::exit(1);
             }
         },
-        Commands::Off => match send_ipc_request(r#"{"id":"off-1","type":"disable"}"#) {
+        Commands::Off => match send_ipc_request(&socket_path, r#"{"id":"off-1","type":"disable"}"#)
+        {
             Ok(response) => {
                 if response.contains("\"ack\"") {
                     println!("aliast: suggestions disabled");

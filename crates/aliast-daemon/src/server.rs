@@ -2,10 +2,15 @@ use std::path::Path;
 
 use anyhow::Result;
 use tokio::net::UnixListener;
+use tokio_util::task::TaskTracker;
 
 use crate::DaemonState;
 use crate::connection::handle_connection;
 use crate::lifecycle;
+
+/// How long shutdown waits for in-flight connections (e.g. a slow NL generate)
+/// to finish before the process exits.
+const DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
 /// Cleans up any stale socket and binds a Unix listener at `socket_path`.
 ///
@@ -39,6 +44,8 @@ pub async fn run_server_with_listener(
     socket_path: &Path,
     state: DaemonState,
 ) -> Result<()> {
+    let connections = TaskTracker::new();
+
     loop {
         tokio::select! {
             _ = state.cancel_token.cancelled() => {
@@ -50,7 +57,7 @@ pub async fn run_server_with_listener(
                     Ok((stream, _addr)) => {
                         let child_token = state.cancel_token.child_token();
                         let conn_state = state.clone();
-                        tokio::spawn(async move {
+                        connections.spawn(async move {
                             if let Err(err) = handle_connection(stream, child_token, conn_state).await {
                                 tracing::error!("Connection handler error: {err}");
                             }
@@ -65,6 +72,16 @@ pub async fn run_server_with_listener(
                 }
             }
         }
+    }
+
+    // Give in-flight connections a bounded grace period to finish (e.g. a slow NL
+    // generate) instead of hard-killing them when the process exits.
+    connections.close();
+    if tokio::time::timeout(DRAIN_TIMEOUT, connections.wait())
+        .await
+        .is_err()
+    {
+        tracing::warn!("Timed out draining connections on shutdown");
     }
 
     lifecycle::remove_socket(socket_path);
