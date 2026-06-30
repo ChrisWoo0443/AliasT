@@ -16,22 +16,28 @@ pub fn suggest(store: &HistoryStore, buffer: &str, context: &SuggestionContext) 
 
     // Try frecency-ranked suggestion first
     if let Ok(Some(full_command)) = store.suggest_ranked(buffer, context) {
-        let suffix = &full_command[buffer.len()..];
-        if !suffix.is_empty() {
-            return Some(suffix.to_string());
+        let ranked_suffix = nonempty_suffix(&full_command, buffer);
+        if ranked_suffix.is_some() {
+            return ranked_suffix;
         }
     }
 
     // Fall back to simple prefix match
     match store.suggest_prefix(buffer) {
-        Ok(Some(full_command)) => {
-            let suffix = &full_command[buffer.len()..];
-            if suffix.is_empty() {
-                None
-            } else {
-                Some(suffix.to_string())
-            }
-        }
+        Ok(Some(full_command)) => nonempty_suffix(&full_command, buffer),
         _ => None,
     }
+}
+
+/// Returns the portion of `command` that extends past `buffer`, or None if the
+/// command does not start with `buffer` or adds nothing.
+///
+/// Uses `strip_prefix` rather than byte slicing so a match that unexpectedly
+/// isn't prefixed by the buffer yields None instead of panicking the daemon
+/// (e.g. on a non-char-boundary slice).
+fn nonempty_suffix(command: &str, buffer: &str) -> Option<String> {
+    command
+        .strip_prefix(buffer)
+        .filter(|suffix| !suffix.is_empty())
+        .map(str::to_string)
 }

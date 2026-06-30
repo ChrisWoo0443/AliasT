@@ -20,6 +20,45 @@ pub enum AiError {
     NoModel,
 }
 
+/// Cleans a raw model response into a bare shell command.
+///
+/// Models often ignore the "no markdown, no backticks" instruction and wrap
+/// the command in a fenced code block, inline backticks, or a leading shell
+/// prompt. Pasting that verbatim into the buffer yields a broken command, so
+/// every backend runs its output through this before returning it.
+///
+/// Handles, in order: fenced code blocks (```` ```bash\n...\n``` ````), inline
+/// backticks (`` `cmd` ``), and a leading `$ ` prompt. The result is trimmed.
+pub fn sanitize_command(raw: &str) -> String {
+    let mut text = raw.trim();
+
+    // Fenced code block: drop the opening ``` (and optional language tag on the
+    // same line), then the closing ```.
+    if let Some(after_fence) = text.strip_prefix("```") {
+        let body = match after_fence.find('\n') {
+            Some(newline) => &after_fence[newline + 1..],
+            None => after_fence,
+        };
+        text = body.trim_end().strip_suffix("```").unwrap_or(body).trim();
+    }
+
+    // Inline backticks: only unwrap when the content itself has no backtick, so
+    // we don't mangle a command that legitimately uses command substitution.
+    if text.len() >= 2 && text.starts_with('`') && text.ends_with('`') {
+        let inner = &text[1..text.len() - 1];
+        if !inner.contains('`') {
+            text = inner.trim();
+        }
+    }
+
+    // Leading shell prompt: "$ ls" -> "ls".
+    if let Some(after_prompt) = text.strip_prefix("$ ") {
+        text = after_prompt.trim();
+    }
+
+    text.to_string()
+}
+
 /// Trait for pluggable AI backends that generate shell commands from
 /// natural language prompts.
 #[async_trait]

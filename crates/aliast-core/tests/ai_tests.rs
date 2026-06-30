@@ -2,7 +2,7 @@ use aliast_core::ai::claude::ClaudeBackend;
 use aliast_core::ai::ollama::OllamaBackend;
 use aliast_core::ai::ollama::SYSTEM_PROMPT;
 use aliast_core::ai::openai::OpenAiBackend;
-use aliast_core::ai::{AiBackend, AiError};
+use aliast_core::ai::{sanitize_command, AiBackend, AiError};
 
 /// Verify the AiBackend trait is object-safe by creating a Box<dyn AiBackend>.
 #[test]
@@ -203,4 +203,58 @@ async fn openai_health_check_returns_unavailable_for_unreachable_server() {
         }
         other => panic!("Expected AiError::Unavailable, got: {:?}", other),
     }
+}
+
+// --- Command sanitization tests ---
+
+#[test]
+fn sanitize_passes_plain_command_through() {
+    assert_eq!(sanitize_command("ls -la"), "ls -la");
+}
+
+#[test]
+fn sanitize_trims_surrounding_whitespace() {
+    assert_eq!(sanitize_command("  git status\n"), "git status");
+}
+
+#[test]
+fn sanitize_strips_fenced_block_with_language() {
+    assert_eq!(sanitize_command("```bash\nls -la\n```"), "ls -la");
+}
+
+#[test]
+fn sanitize_strips_fenced_block_without_language() {
+    assert_eq!(sanitize_command("```\nls -la\n```"), "ls -la");
+}
+
+#[test]
+fn sanitize_strips_single_line_fence() {
+    assert_eq!(sanitize_command("```ls -la```"), "ls -la");
+}
+
+#[test]
+fn sanitize_strips_inline_backticks() {
+    assert_eq!(sanitize_command("`ls -la`"), "ls -la");
+}
+
+#[test]
+fn sanitize_strips_leading_shell_prompt() {
+    assert_eq!(sanitize_command("$ ls -la"), "ls -la");
+}
+
+#[test]
+fn sanitize_strips_prompt_inside_fence() {
+    assert_eq!(sanitize_command("```\n$ ls -la\n```"), "ls -la");
+}
+
+#[test]
+fn sanitize_preserves_command_substitution() {
+    // A command whose body contains backticks must not be unwrapped.
+    assert_eq!(sanitize_command("echo `date`"), "echo `date`");
+}
+
+#[test]
+fn sanitize_handles_empty_input() {
+    assert_eq!(sanitize_command(""), "");
+    assert_eq!(sanitize_command("```\n```"), "");
 }

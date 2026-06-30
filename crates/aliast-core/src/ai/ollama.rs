@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use reqwest::Client;
 use std::time::Duration;
 
-use super::{AiBackend, AiError};
+use super::{sanitize_command, AiBackend, AiError};
 
 /// System prompt that instructs the model to output only a shell command.
 pub const SYSTEM_PROMPT: &str = "\
@@ -110,7 +110,7 @@ impl AiBackend for OllamaBackend {
             .await
             .map_err(|err| AiError::GenerationFailed(err.to_string()))?;
 
-        Ok(chat_response.message.content.trim().to_string())
+        Ok(sanitize_command(&chat_response.message.content))
     }
 
     async fn health_check(&self) -> Result<(), AiError> {

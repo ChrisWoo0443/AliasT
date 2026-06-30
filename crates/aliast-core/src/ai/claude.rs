@@ -3,7 +3,7 @@ use reqwest::Client;
 use std::time::Duration;
 
 use super::ollama::SYSTEM_PROMPT;
-use super::{AiBackend, AiError};
+use super::{sanitize_command, AiBackend, AiError};
 
 /// Request body for the Anthropic Messages API.
 #[derive(serde::Serialize)]
@@ -106,7 +106,7 @@ impl AiBackend for ClaudeBackend {
         let text = claude_response
             .content
             .first()
-            .map(|block| block.text.trim().to_string())
+            .map(|block| sanitize_command(&block.text))
             .unwrap_or_default();
 
         Ok(text)

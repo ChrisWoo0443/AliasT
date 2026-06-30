@@ -3,7 +3,7 @@ use reqwest::Client;
 use std::time::Duration;
 
 use super::ollama::SYSTEM_PROMPT;
-use super::{AiBackend, AiError};
+use super::{sanitize_command, AiBackend, AiError};
 
 /// Request body for the OpenAI Chat Completions API.
 #[derive(serde::Serialize)]
@@ -113,7 +113,7 @@ impl AiBackend for OpenAiBackend {
         let text = openai_response
             .choices
             .first()
-            .map(|choice| choice.message.content.trim().to_string())
+            .map(|choice| sanitize_command(&choice.message.content))
             .unwrap_or_default();
 
         Ok(text)

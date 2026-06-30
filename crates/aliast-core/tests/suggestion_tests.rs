@@ -89,3 +89,19 @@ fn suggest_with_context_uses_frecency_ranking() {
     let result = suggest(&store, "git ch", &context);
     assert_eq!(result, Some("eckout main".to_string()));
 }
+
+#[test]
+fn suggest_handles_multibyte_prefix() {
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let db_path = tmp_dir.path().join("test.db");
+    let store = HistoryStore::open(&db_path).unwrap();
+
+    // Command whose prefix contains a multibyte UTF-8 character.
+    store
+        .record_command("echo café au lait", 1000, "/home", None)
+        .unwrap();
+
+    let context = SuggestionContext::default();
+    let result = suggest(&store, "echo café", &context);
+    assert_eq!(result, Some(" au lait".to_string()));
+}

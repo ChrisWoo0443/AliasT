@@ -99,10 +99,8 @@ pub fn enrich_prompt(
     if let Some(dir) = cwd {
         parts.push(format!("Current directory: {}", dir));
     }
-    if let Some(code) = exit_code {
-        if code != 0 {
-            parts.push(format!("Last command failed with exit code: {}", code));
-        }
+    if let Some(code) = exit_code.filter(|&c| c != 0) {
+        parts.push(format!("Last command failed with exit code: {}", code));
     }
     if let Some(branch) = git_branch {
         parts.push(format!("Git branch: {}", branch));
