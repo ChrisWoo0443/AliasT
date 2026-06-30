@@ -76,12 +76,17 @@ jobs:
           mkdir -p release
 
           # Bundle the binary and the zsh plugin together in each versioned
-          # tarball so the formula needs a single download + checksum per arch.
+          # tarball so the formula can use a single download + checksum per arch.
           for arch in aarch64-apple-darwin x86_64-apple-darwin; do
             cp plugin/aliast.plugin.zsh "artifacts/aliast-${arch}/"
             tar -czf "release/aliast-${arch}.tar.gz" \
               -C "artifacts/aliast-${arch}" aliast aliast.plugin.zsh
           done
+
+          # Also ship the plugin as a loose asset for backward compatibility with
+          # formulas that fetch it separately. TODO: once the tap formula extracts
+          # the plugin from the tarball, this loose asset can be dropped.
+          cp plugin/aliast.plugin.zsh release/
 
           cd release
           sha256sum * > SHA256SUMS
