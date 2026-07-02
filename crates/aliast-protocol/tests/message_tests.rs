@@ -9,6 +9,7 @@ fn serialize_complete_request() {
         cwd: None,
         exit_code: None,
         git_branch: None,
+        skip: None,
     };
     let json = serde_json::to_string(&request).unwrap();
     assert_eq!(
@@ -105,6 +106,7 @@ fn roundtrip_request() {
         cwd: None,
         exit_code: None,
         git_branch: None,
+        skip: None,
     };
     let json = serde_json::to_string(&request).unwrap();
     let deserialized: Request = serde_json::from_str(&json).unwrap();
@@ -280,6 +282,7 @@ fn complete_backward_compat_no_context() {
             cwd: None,
             exit_code: None,
             git_branch: None,
+            skip: None,
         }
     );
 }
@@ -297,6 +300,7 @@ fn complete_with_full_context() {
             cwd: Some("/home".to_string()),
             exit_code: Some(0),
             git_branch: Some("main".to_string()),
+            skip: None,
         }
     );
 }
@@ -516,6 +520,7 @@ fn complete_none_context_omitted_from_json() {
         cwd: None,
         exit_code: None,
         git_branch: None,
+        skip: None,
     };
     let json = serde_json::to_string(&request).unwrap();
     assert!(!json.contains("cwd"));
@@ -532,9 +537,29 @@ fn complete_with_context_includes_fields_in_json() {
         cwd: Some("/home".to_string()),
         exit_code: Some(0),
         git_branch: Some("main".to_string()),
+        skip: None,
     };
     let json = serde_json::to_string(&request).unwrap();
     assert!(json.contains(r#""cwd":"/home""#));
     assert!(json.contains(r#""exit_code":0"#));
     assert!(json.contains(r#""git_branch":"main""#));
+}
+
+#[test]
+fn complete_request_skip_field_roundtrip() {
+    // Cycling: skip=N asks for the N-th ranked candidate. Absent means 0.
+    let with_skip: Request =
+        serde_json::from_str(r#"{"type":"complete","id":"r1","buf":"git","cur":3,"skip":2}"#)
+            .unwrap();
+    match with_skip {
+        Request::Complete { skip, .. } => assert_eq!(skip, Some(2)),
+        other => panic!("expected Complete, got {other:?}"),
+    }
+
+    let without_skip: Request =
+        serde_json::from_str(r#"{"type":"complete","id":"r1","buf":"git","cur":3}"#).unwrap();
+    match without_skip {
+        Request::Complete { skip, .. } => assert_eq!(skip, None),
+        other => panic!("expected Complete, got {other:?}"),
+    }
 }

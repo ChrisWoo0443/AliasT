@@ -22,6 +22,9 @@ pub enum Request {
         /// Current git branch for context-aware ranking.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         git_branch: Option<String>,
+        /// Which ranked candidate to return (0 = best). Used for cycling.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        skip: Option<u32>,
     },
 
     /// Ping the daemon to check if it is alive.

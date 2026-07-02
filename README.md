@@ -61,7 +61,7 @@ Run `aliast doctor` to verify your setup.
 
 ### Ghost Text
 
-Start typing a command. Suggestions appear as dimmed text after your cursor. Press **Tab** to accept the whole suggestion, or **Shift+Tab** to accept just the next word.
+Start typing a command. Suggestions appear as dimmed text after your cursor. Press **Tab** to accept the whole suggestion, or **Shift+Tab** to accept just the next word. When the top match isn't the one you want, **Ctrl+N** / **Ctrl+P** cycle through the other candidates (with no suggestion showing, they do normal history navigation).
 
 ### Natural Language Mode
 

@@ -133,6 +133,7 @@ async fn dispatch_request(request: Request, state: &DaemonState) -> Response {
             cwd,
             exit_code,
             git_branch,
+            skip,
         } => {
             if !state.enabled.load(Ordering::Relaxed) {
                 return Response::Suggestion {
@@ -150,7 +151,8 @@ async fn dispatch_request(request: Request, state: &DaemonState) -> Response {
                 git_branch,
             };
             let suggestion_text =
-                aliast_core::suggest(&store_guard, &buf, &context).unwrap_or_default();
+                aliast_core::suggest_at(&store_guard, &buf, &context, skip.unwrap_or(0))
+                    .unwrap_or_default();
             Response::Suggestion {
                 id,
                 text: suggestion_text,

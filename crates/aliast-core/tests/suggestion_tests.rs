@@ -174,3 +174,38 @@ fn suggest_with_context_uses_frecency_ranking() {
     let result = suggest(&store, "git ch", &context);
     assert_eq!(result, Some("eckout main".to_string()));
 }
+
+#[test]
+fn suggest_at_returns_nth_ranked_candidate() {
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let store = HistoryStore::open(&tmp_dir.path().join("test.db")).unwrap();
+    let now = now_secs();
+
+    for i in 0..10 {
+        store
+            .record_command("git push", now - 50 + i, "/p", Some(0))
+            .unwrap();
+    }
+    for i in 0..3 {
+        store
+            .record_command("git pull", now - 50 + i, "/p", Some(0))
+            .unwrap();
+    }
+
+    let context = SuggestionContext::default();
+    assert_eq!(
+        aliast_core::suggest_at(&store, "git p", &context, 0),
+        Some("ush".to_string()),
+        "skip=0 is the top candidate"
+    );
+    assert_eq!(
+        aliast_core::suggest_at(&store, "git p", &context, 1),
+        Some("ull".to_string()),
+        "skip=1 is the runner-up"
+    );
+    assert_eq!(
+        aliast_core::suggest_at(&store, "git p", &context, 5),
+        None,
+        "skip past the end returns None"
+    );
+}

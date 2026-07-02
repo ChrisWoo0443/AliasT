@@ -228,6 +228,7 @@ _aliast_clear_ghost() {
 _aliast_request_suggestion() {
   _aliast_connect || return
 
+  local skip="${1:-0}"
   (( _ALIAST_REQ_ID++ ))
   local req_id="r${_ALIAST_REQ_ID}"
 
@@ -246,7 +247,10 @@ _aliast_request_suggestion() {
     exit_field=",\"exit_code\":${_ALIAST_LAST_EXIT}"
   fi
 
-  local msg="{\"id\":\"${req_id}\",\"type\":\"complete\",\"buf\":\"${escaped_buffer}\",\"cur\":${CURSOR},\"cwd\":\"${escaped_cwd}\"${exit_field}${branch_field}}"
+  local skip_field=""
+  (( skip > 0 )) && skip_field=",\"skip\":${skip}"
+
+  local msg="{\"id\":\"${req_id}\",\"type\":\"complete\",\"buf\":\"${escaped_buffer}\",\"cur\":${CURSOR},\"cwd\":\"${escaped_cwd}\"${exit_field}${branch_field}${skip_field}}"
 
   _aliast_send $_ALIAST_FD "$msg" 2>/dev/null || {
     _aliast_reconnect
@@ -303,9 +307,36 @@ _aliast_self_insert_wrapper() {
   zle .self-insert "$@"
   # Skip ghost text suggestions during NL mode (PREDISPLAY conflicts)
   [[ "$_ALIAST_NL_STATE" != "inactive" ]] && return
+  typeset -g _ALIAST_CYCLE_SKIP=0   # new typing resets candidate cycling
   _aliast_request_suggestion
 }
 zle -N self-insert _aliast_self_insert_wrapper
+
+# ── Suggestion cycling (fish-style) ─────────────────────────────────
+# Ctrl+N/Ctrl+P step through ranked candidates while ghost text is showing;
+# with no ghost they fall through to normal history navigation.
+_aliast_cycle_next() {
+  if [[ -n "$POSTDISPLAY" || $_ALIAST_CYCLE_SKIP -gt 0 ]]; then
+    (( _ALIAST_CYCLE_SKIP++ ))
+    _aliast_request_suggestion $_ALIAST_CYCLE_SKIP
+  else
+    zle .down-line-or-history
+  fi
+}
+zle -N _aliast_cycle_next
+
+_aliast_cycle_prev() {
+  if (( _ALIAST_CYCLE_SKIP > 0 )); then
+    (( _ALIAST_CYCLE_SKIP-- ))
+    _aliast_request_suggestion $_ALIAST_CYCLE_SKIP
+  else
+    zle .up-line-or-history
+  fi
+}
+zle -N _aliast_cycle_prev
+
+bindkey '^N' _aliast_cycle_next
+bindkey '^P' _aliast_cycle_prev
 
 _aliast_nl_aware_accept() {
   case "$_ALIAST_NL_STATE" in

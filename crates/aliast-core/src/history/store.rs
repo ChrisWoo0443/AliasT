@@ -145,6 +145,17 @@ impl HistoryStore {
         prefix: &str,
         context: &SuggestionContext,
     ) -> Result<Option<String>, rusqlite::Error> {
+        self.suggest_ranked_at(prefix, context, 0)
+    }
+
+    /// Like [`suggest_ranked`](Self::suggest_ranked), but returns the candidate
+    /// at rank `skip` (0 = best). Powers fish-style suggestion cycling.
+    pub fn suggest_ranked_at(
+        &self,
+        prefix: &str,
+        context: &SuggestionContext,
+        skip: u32,
+    ) -> Result<Option<String>, rusqlite::Error> {
         if prefix.is_empty() {
             return Ok(None);
         }
@@ -195,7 +206,7 @@ impl HistoryStore {
              GROUP BY command
              ORDER BY (recency_score + frequency_score + directory_bonus + exit_penalty) DESC,
                       MAX(timestamp) DESC
-             LIMIT 1",
+             LIMIT 1 OFFSET :skip",
         )?;
 
         let result = statement.query_row(
@@ -203,6 +214,7 @@ impl HistoryStore {
                 ":now": now,
                 ":cwd": context_cwd,
                 ":pattern": like_pattern,
+                ":skip": skip,
             },
             |row| row.get::<_, String>(0),
         );
