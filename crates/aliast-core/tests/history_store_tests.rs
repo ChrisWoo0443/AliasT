@@ -127,7 +127,7 @@ fn import_entries_inserts_batch() {
 // --- Schema migration tests ---
 
 #[test]
-fn fresh_db_has_user_version_1_and_exit_code_column() {
+fn fresh_db_has_current_user_version_and_exit_code_column() {
     let tmp_dir = tempfile::tempdir().unwrap();
     let db_path = tmp_dir.path().join("test.db");
     let _store = HistoryStore::open(&db_path).unwrap();
@@ -137,7 +137,7 @@ fn fresh_db_has_user_version_1_and_exit_code_column() {
     let version: i32 = conn
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .unwrap();
-    assert_eq!(version, 1);
+    assert_eq!(version, 2);
 
     // Verify exit_code column exists
     let result = conn.execute(
@@ -187,12 +187,12 @@ fn migrate_existing_db_without_exit_code() {
         .unwrap();
     assert_eq!(store.count().unwrap(), 2);
 
-    // Verify user_version is now 1
+    // Verify migrations ran to the current schema version
     let conn = rusqlite::Connection::open(&db_path).unwrap();
     let version: i32 = conn
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .unwrap();
-    assert_eq!(version, 1);
+    assert_eq!(version, 2);
 }
 
 // --- record_command with exit_code tests ---
@@ -388,4 +388,51 @@ fn frecency_no_match_returns_none() {
     let context = SuggestionContext::default();
     let result = store.suggest_ranked("cargo ", &context).unwrap();
     assert_eq!(result, None);
+}
+
+#[test]
+fn record_acceptance_boosts_ranking() {
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let db_path = tmp_dir.path().join("test.db");
+    let store = HistoryStore::open(&db_path).unwrap();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+
+    // Two equally-frequent, equally-recent candidates.
+    for i in 0..3 {
+        store
+            .record_command("make alpha", now - 50 + i, "/p", Some(0))
+            .unwrap();
+        store
+            .record_command("make beta", now - 50 + i, "/p", Some(0))
+            .unwrap();
+    }
+
+    // The user repeatedly accepts the beta suggestion.
+    for _ in 0..3 {
+        store.record_acceptance("make beta").unwrap();
+    }
+
+    let context = SuggestionContext::default();
+    let top = store.suggest_ranked("make ", &context).unwrap();
+    assert_eq!(
+        top,
+        Some("make beta".to_string()),
+        "accepted suggestions should outrank otherwise-equal candidates"
+    );
+}
+
+#[test]
+fn record_acceptance_survives_reopen() {
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let db_path = tmp_dir.path().join("test.db");
+    {
+        let store = HistoryStore::open(&db_path).unwrap();
+        store.record_acceptance("git status").unwrap();
+    }
+    let store = HistoryStore::open(&db_path).unwrap();
+    // Recording again must upsert, not fail on a unique constraint.
+    store.record_acceptance("git status").unwrap();
 }

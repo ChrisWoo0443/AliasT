@@ -371,6 +371,13 @@ _aliast_accept_suggestion() {
     _aliast_clear_ghost
     BUFFER="${BUFFER}${ghost}"
     CURSOR=$#BUFFER
+    # Ranking feedback, fire-and-forget: the ack is dropped by the async
+    # handler (wrong type) or the next id-matched drain.
+    if [[ -n "$_ALIAST_FD" ]]; then
+      _aliast_json_escape "$BUFFER"
+      (( _ALIAST_REQ_ID++ ))
+      _aliast_send $_ALIAST_FD "{\"id\":\"r${_ALIAST_REQ_ID}\",\"type\":\"accept\",\"cmd\":\"${REPLY}\"}" 2>/dev/null
+    fi
   else
     zle expand-or-complete
   fi

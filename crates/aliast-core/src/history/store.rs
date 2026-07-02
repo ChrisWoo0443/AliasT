@@ -68,6 +68,19 @@ impl HistoryStore {
             conn.execute_batch("PRAGMA user_version = 1;")?;
         }
 
+        if user_version < 2 {
+            // Acceptance feedback: one row per command the user has accepted a
+            // ghost suggestion for. Feeds a ranking bonus.
+            conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS acceptances (
+                    command  TEXT PRIMARY KEY,
+                    count    INTEGER NOT NULL DEFAULT 0,
+                    last_ts  INTEGER NOT NULL DEFAULT 0
+                 );
+                 PRAGMA user_version = 2;",
+            )?;
+        }
+
         let store = Self { conn };
         store.prune(MAX_HISTORY_ENTRIES)?;
         Ok(store)
@@ -97,6 +110,21 @@ impl HistoryStore {
         self.conn.execute(
             "INSERT INTO history (command, timestamp, cwd, exit_code) VALUES (?1, ?2, ?3, ?4)",
             rusqlite::params![command, timestamp, cwd, exit_code],
+        )?;
+        Ok(())
+    }
+
+    /// Records that the user accepted a ghost suggestion for `command`.
+    /// The signal feeds a ranking bonus in [`suggest_ranked_at`](Self::suggest_ranked_at).
+    pub fn record_acceptance(&self, command: &str) -> Result<(), rusqlite::Error> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+        self.conn.execute(
+            "INSERT INTO acceptances (command, count, last_ts) VALUES (?1, 1, ?2)
+             ON CONFLICT(command) DO UPDATE SET count = count + 1, last_ts = ?2",
+            rusqlite::params![command, now],
         )?;
         Ok(())
     }
@@ -174,7 +202,7 @@ impl HistoryStore {
         let context_cwd = context.cwd.as_deref().unwrap_or("");
 
         let mut statement = self.conn.prepare_cached(
-            "SELECT command,
+            "SELECT history.command,
                     -- Recency score based on most recent execution
                     CASE
                         WHEN MAX(timestamp) >= (:now - 3600) THEN 100
@@ -200,11 +228,18 @@ impl HistoryStore {
                     CASE
                         WHEN SUM(CASE WHEN exit_code IS NOT NULL AND exit_code != 0 THEN 1 ELSE 0 END) * 2 > COUNT(CASE WHEN exit_code IS NOT NULL THEN 1 END) THEN -40
                         ELSE 0
-                    END AS exit_penalty
+                    END AS exit_penalty,
+                    -- Acceptance bonus: the user has accepted this suggestion before
+                    CASE
+                        WHEN COALESCE(MAX(acceptances.count), 0) >= 5 THEN 25
+                        WHEN COALESCE(MAX(acceptances.count), 0) >= 1 THEN 15
+                        ELSE 0
+                    END AS acceptance_bonus
              FROM history
-             WHERE command LIKE :pattern ESCAPE '\\'
-             GROUP BY command
-             ORDER BY (recency_score + frequency_score + directory_bonus + exit_penalty) DESC,
+             LEFT JOIN acceptances ON acceptances.command = history.command
+             WHERE history.command LIKE :pattern ESCAPE '\\'
+             GROUP BY history.command
+             ORDER BY (recency_score + frequency_score + directory_bonus + exit_penalty + acceptance_bonus) DESC,
                       MAX(timestamp) DESC
              LIMIT 1 OFFSET :skip",
         )?;

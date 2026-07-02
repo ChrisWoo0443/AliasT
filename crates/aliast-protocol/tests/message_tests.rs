@@ -563,3 +563,16 @@ fn complete_request_skip_field_roundtrip() {
         other => panic!("expected Complete, got {other:?}"),
     }
 }
+
+#[test]
+fn accept_request_deserializes() {
+    let request: Request =
+        serde_json::from_str(r#"{"type":"accept","id":"r9","cmd":"git status"}"#).unwrap();
+    assert_eq!(
+        request,
+        Request::Accept {
+            id: "r9".to_string(),
+            cmd: "git status".to_string(),
+        }
+    );
+}

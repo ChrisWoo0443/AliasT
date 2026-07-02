@@ -48,6 +48,15 @@ pub enum Request {
         exit_code: Option<i32>,
     },
 
+    /// Report that the user accepted a ghost suggestion (ranking feedback).
+    #[serde(rename = "accept")]
+    Accept {
+        /// Unique request identifier.
+        id: String,
+        /// The full command whose suggestion was accepted.
+        cmd: String,
+    },
+
     /// Request to generate a shell command from natural language.
     #[serde(rename = "generate")]
     Generate {

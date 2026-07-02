@@ -180,6 +180,16 @@ async fn dispatch_request(request: Request, state: &DaemonState) -> Response {
             }
             Response::Ack { id }
         }
+        Request::Accept { id, cmd } => {
+            let store_guard = state
+                .store
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            if let Err(err) = store_guard.record_acceptance(&cmd) {
+                tracing::error!("Failed to record acceptance: {err}");
+            }
+            Response::Ack { id }
+        }
         Request::Generate {
             id,
             prompt,
