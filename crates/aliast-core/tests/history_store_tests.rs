@@ -436,3 +436,55 @@ fn record_acceptance_survives_reopen() {
     // Recording again must upsert, not fail on a unique constraint.
     store.record_acceptance("git status").unwrap();
 }
+
+#[test]
+fn import_entries_dedup_skips_existing_rows() {
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let store = HistoryStore::open(&tmp_dir.path().join("test.db")).unwrap();
+
+    let entries = vec![
+        HistoryEntry {
+            command: "git status".to_string(),
+            timestamp: Some(1000),
+        },
+        HistoryEntry {
+            command: "ls -la".to_string(),
+            timestamp: Some(2000),
+        },
+    ];
+    assert_eq!(store.import_entries_dedup(&entries).unwrap(), 2);
+
+    // Re-importing the same file must not duplicate rows...
+    assert_eq!(store.import_entries_dedup(&entries).unwrap(), 0);
+    assert_eq!(store.count().unwrap(), 2);
+
+    // ...while genuinely new entries still land.
+    let more = vec![HistoryEntry {
+        command: "cargo build".to_string(),
+        timestamp: Some(3000),
+    }];
+    assert_eq!(store.import_entries_dedup(&more).unwrap(), 1);
+    assert_eq!(store.count().unwrap(), 3);
+}
+
+#[test]
+fn top_commands_orders_by_usage() {
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let store = HistoryStore::open(&tmp_dir.path().join("test.db")).unwrap();
+
+    for i in 0..5 {
+        store
+            .record_command("git status", 100 + i, "/p", None)
+            .unwrap();
+    }
+    for i in 0..2 {
+        store.record_command("ls", 200 + i, "/p", None).unwrap();
+    }
+
+    let top = store.top_commands(10).unwrap();
+    assert_eq!(top[0], ("git status".to_string(), 5));
+    assert_eq!(top[1], ("ls".to_string(), 2));
+
+    let capped = store.top_commands(1).unwrap();
+    assert_eq!(capped.len(), 1);
+}

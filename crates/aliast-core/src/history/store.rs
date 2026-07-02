@@ -280,6 +280,53 @@ impl HistoryStore {
         Ok(count)
     }
 
+    /// Imports history entries, skipping any (command, timestamp) pair already
+    /// present -- safe to run repeatedly (`aliast import`). Returns the number
+    /// of newly inserted rows.
+    pub fn import_entries_dedup(&self, entries: &[HistoryEntry]) -> Result<usize, rusqlite::Error> {
+        let transaction = self.conn.unchecked_transaction()?;
+
+        let mut inserted = 0;
+        for entry in entries {
+            let timestamp = entry.timestamp.unwrap_or(0);
+            let changed = transaction.execute(
+                "INSERT INTO history (command, timestamp, cwd, exit_code)
+                 SELECT ?1, ?2, '', NULL
+                 WHERE NOT EXISTS (
+                     SELECT 1 FROM history WHERE command = ?1 AND timestamp = ?2
+                 )",
+                rusqlite::params![entry.command, timestamp],
+            )?;
+            inserted += changed;
+        }
+
+        transaction.commit()?;
+        Ok(inserted)
+    }
+
+    /// Returns the most-used commands with their usage counts, best first.
+    pub fn top_commands(&self, limit: u32) -> Result<Vec<(String, i64)>, rusqlite::Error> {
+        let mut statement = self.conn.prepare_cached(
+            "SELECT command, COUNT(*) AS uses FROM history
+             GROUP BY command ORDER BY uses DESC, MAX(timestamp) DESC LIMIT ?1",
+        )?;
+        let rows = statement.query_map(rusqlite::params![limit], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })?;
+        rows.collect()
+    }
+
+    /// Returns the most-accepted suggestions with their counts, best first.
+    pub fn top_accepted(&self, limit: u32) -> Result<Vec<(String, i64)>, rusqlite::Error> {
+        let mut statement = self.conn.prepare_cached(
+            "SELECT command, count FROM acceptances ORDER BY count DESC, last_ts DESC LIMIT ?1",
+        )?;
+        let rows = statement.query_map(rusqlite::params![limit], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })?;
+        rows.collect()
+    }
+
     /// Returns the total number of entries in the history store.
     pub fn count(&self) -> Result<i64, rusqlite::Error> {
         self.conn

@@ -78,6 +78,24 @@ enum Commands {
     Off,
     /// Run diagnostic health checks.
     Doctor,
+    /// Import new entries from ~/.zsh_history into the suggestion database.
+    Import,
+    /// Show history statistics: top commands and accepted suggestions.
+    Stats,
+}
+
+/// Resolves the aliast data directory (~/Library/Application Support/aliast on
+/// macOS, ~/.local/share/aliast as fallback).
+fn data_dir() -> PathBuf {
+    directories::BaseDirs::new()
+        .map(|dirs| dirs.data_local_dir().join("aliast"))
+        .unwrap_or_else(|| {
+            let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+            PathBuf::from(home)
+                .join(".local")
+                .join("share")
+                .join("aliast")
+        })
 }
 
 /// Initializes tracing with file-based logging.
@@ -223,18 +241,10 @@ async fn main() -> Result<()> {
 
             tracing::info!(?socket_path, "starting daemon");
 
-            // Initialize HistoryStore at ~/.local/share/aliast/history.db
-            let data_dir = directories::BaseDirs::new()
-                .map(|dirs| dirs.data_local_dir().join("aliast"))
-                .unwrap_or_else(|| {
-                    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-                    PathBuf::from(home)
-                        .join(".local")
-                        .join("share")
-                        .join("aliast")
-                });
-            std::fs::create_dir_all(&data_dir)?;
-            let db_path = data_dir.join("history.db");
+            // Initialize the HistoryStore in the aliast data directory.
+            let store_dir = data_dir();
+            std::fs::create_dir_all(&store_dir)?;
+            let db_path = store_dir.join("history.db");
 
             let store = HistoryStore::open(&db_path)?;
             tracing::info!(?db_path, "opened history database");
@@ -462,6 +472,57 @@ async fn main() -> Result<()> {
             let has_failures = checks.iter().any(|c| !c.passed);
             if has_failures {
                 std::process::exit(1);
+            }
+        }
+        Commands::Import => {
+            let home = std::env::var("HOME").unwrap_or_default();
+            let zsh_history_path = PathBuf::from(&home).join(".zsh_history");
+            let bytes = match std::fs::read(&zsh_history_path) {
+                Ok(bytes) => bytes,
+                Err(err) => {
+                    eprintln!("aliast: cannot read {}: {err}", zsh_history_path.display());
+                    std::process::exit(1);
+                }
+            };
+            let mut entries = parse_history_bytes(&bytes);
+            // Match the first-run import: synthesize stable index-based
+            // timestamps for entries without one, so re-imports dedup cleanly.
+            for (index, entry) in entries.iter_mut().enumerate() {
+                if entry.timestamp.is_none() {
+                    entry.timestamp = Some((index + 1) as i64);
+                }
+            }
+
+            let dir = data_dir();
+            std::fs::create_dir_all(&dir)?;
+            let store = HistoryStore::open(&dir.join("history.db"))?;
+            let inserted = store.import_entries_dedup(&entries)?;
+            println!(
+                "aliast: imported {} new entries ({} already present)",
+                inserted,
+                entries.len() - inserted
+            );
+        }
+        Commands::Stats => {
+            let db_path = data_dir().join("history.db");
+            if !db_path.exists() {
+                println!("aliast: no history database yet (run the daemon or `aliast import`)");
+                return Ok(());
+            }
+            let store = HistoryStore::open(&db_path)?;
+            println!("History: {} recorded commands", store.count()?);
+            println!();
+            println!("Top commands:");
+            for (command, uses) in store.top_commands(10)? {
+                println!("  {:>5}x  {}", uses, command);
+            }
+            let accepted = store.top_accepted(5)?;
+            if !accepted.is_empty() {
+                println!();
+                println!("Most-accepted suggestions:");
+                for (command, count) in accepted {
+                    println!("  {:>5}x  {}", count, command);
+                }
             }
         }
     }

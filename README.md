@@ -80,6 +80,8 @@ aliast status    Show daemon state, socket, and AI backend
 aliast on        Enable suggestions (all shells)
 aliast off       Disable suggestions (all shells)
 aliast doctor    Run diagnostic health checks
+aliast import    Import new entries from ~/.zsh_history (dedup-safe)
+aliast stats     Show top commands and most-accepted suggestions
 ```
 
 The plugin normally starts the daemon on demand, so `aliast stop` also pauses that auto-start -- otherwise the next keystroke would just respawn it. To pause suggestions but keep the daemon running, use `aliast off`.
