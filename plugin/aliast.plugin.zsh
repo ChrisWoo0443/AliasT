@@ -79,6 +79,28 @@ _aliast_response_msg() {
   _aliast_json_unescape "$r"
 }
 
+# True (0) when a generated command matches a destructive pattern that deserves
+# a red tint in the NL review buffer before the user decides to run it.
+_aliast_is_dangerous() {
+  local cmd="$1"
+  [[ "$cmd" =~ 'rm[[:space:]]+(-[a-zA-Z]*[rf][a-zA-Z]*[[:space:]]+)+' ]] && return 0
+  [[ "$cmd" =~ '(^|[[:space:];&|])sudo[[:space:]]' ]] && return 0
+  [[ "$cmd" =~ '(curl|wget)[^|;]*\|[^|]*(ba|z)?sh' ]] && return 0
+  [[ "$cmd" =~ 'dd[[:space:]][^;|]*of=/dev/' ]] && return 0
+  [[ "$cmd" =~ 'mkfs' ]] && return 0
+  [[ "$cmd" =~ '>[[:space:]]*/dev/(sd|disk|rdisk)' ]] && return 0
+  [[ "$cmd" =~ 'chmod[[:space:]]+(-[a-zA-Z]+[[:space:]]+)*777[[:space:]]+/([[:space:]]|$)' ]] && return 0
+  return 1
+}
+
+# Tint the whole review buffer red when the generated command is dangerous.
+# Uses the aliast-nl memo so existing NL cleanup paths remove it.
+_aliast_nl_mark_danger() {
+  if _aliast_is_dangerous "$BUFFER"; then
+    region_highlight+=("0 $#BUFFER fg=red,bold memo=aliast-nl")
+  fi
+}
+
 # Write one NDJSON request to a socket fd byte-exact. Plain `print` (like echo)
 # processes backslash escapes, turning the JSON escape \" into a raw " on the
 # wire -- the daemon then rejects any payload containing a quote. -r disables
@@ -484,6 +506,7 @@ _aliast_nl_generate() {
     BUFFER="$REPLY"
     CURSOR=$#BUFFER
     _ALIAST_NL_STATE="review"
+    _aliast_nl_mark_danger
     zle -R
   elif [[ "$resp_type" == "error" ]]; then
     _aliast_response_msg "$result"
@@ -516,7 +539,9 @@ _aliast_nl_toggle() {
   fi
 }
 zle -N _aliast_nl_toggle
-bindkey '^ ' _aliast_nl_toggle
+# NL toggle key: Ctrl+Space by default, but not every terminal emits it --
+# set ALIAST_NL_KEY (bindkey syntax, e.g. '^G' or '\ea') to rebind.
+bindkey "${ALIAST_NL_KEY:-^ }" _aliast_nl_toggle
 
 _aliast_nl_escape() {
   if [[ "$_ALIAST_NL_STATE" == "review" ]]; then

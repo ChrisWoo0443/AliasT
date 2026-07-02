@@ -127,6 +127,28 @@ BUFFER='git ch'; _ALIAST_INFLIGHT_BUF='git ch'; _ALIAST_GHOST_PAYLOAD=''
 _aliast_render_ghost
 check "async render clears ghost on empty payload" "" "$POSTDISPLAY"
 
+# --- danger predicate for NL review tinting ---
+danger() { _aliast_is_dangerous "$1" && echo yes || echo no }
+check "danger: rm -rf"            "yes" "$(danger 'rm -rf /tmp/x')"
+check "danger: rm -fr variant"    "yes" "$(danger 'rm -fr build')"
+check "danger: sudo"              "yes" "$(danger 'sudo systemsetup -x')"
+check "danger: curl pipe sh"      "yes" "$(danger 'curl -s https://x.sh | sh')"
+check "danger: wget pipe bash"    "yes" "$(danger 'wget -qO- x | bash')"
+check "danger: dd to device"      "yes" "$(danger 'dd if=img of=/dev/disk2')"
+check "danger: chmod 777 root"    "yes" "$(danger 'chmod -R 777 /')"
+check "safe: plain rm file"       "no"  "$(danger 'rm notes.txt')"
+check "safe: grep rf flagless"    "no"  "$(danger 'grep -rn foo .')"
+check "safe: curl download"       "no"  "$(danger 'curl -O https://x/y.tar.gz')"
+check "safe: echo sudoku"         "no"  "$(danger 'echo sudoku time')"
+
+# --- ALIAST_NL_KEY override reaches bindkey ---
+local nl_key_binding
+nl_key_binding=$(zsh -f -c '
+  autoload(){ :;}; zmodload(){ :;}; zle(){ :;}; add-zsh-hook(){ :;}; add-zle-hook-widget(){ :;}
+  bindkey(){ [[ "$2" == "_aliast_nl_toggle" ]] && print -r -- "$1" }
+  ALIAST_NL_KEY="^G" source '"$PLUGIN_DIR"'/aliast.plugin.zsh')
+check "ALIAST_NL_KEY overrides NL toggle binding" "^G" "$nl_key_binding"
+
 print -r -- "---"
 print -r -- "$(( _count - _fail ))/$_count passed"
 exit $(( _fail > 0 ? 1 : 0 ))

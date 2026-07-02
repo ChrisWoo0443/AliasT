@@ -67,6 +67,10 @@ Start typing a command. Suggestions appear as dimmed text after your cursor. Pre
 
 Press **Ctrl+Space** to toggle NL mode. A blue dot appears before your cursor. Type what you want in plain English, press **Enter**, and AliasT generates the shell command. Press **Escape** to exit NL mode.
 
+Generated commands that look destructive (`rm -rf`, `sudo`, `curl | sh`, writes to raw devices, ...) are tinted red in the review buffer so you look twice before pressing Enter.
+
+Some terminals do not emit Ctrl+Space. If the toggle does nothing, rebind it with `export ALIAST_NL_KEY='^G'` (bindkey syntax) before sourcing the plugin.
+
 ### Commands
 
 ```
@@ -95,6 +99,7 @@ Suggestions are ranked by frecency -- frequency, recency, directory, and exit co
 | `ALIAST_ANTHROPIC_KEY` | API key for Claude | |
 | `ALIAST_OPENAI_KEY` | API key for OpenAI | |
 | `ALIAST_NL_NO_CONTEXT` | Send only the prompt to the AI (omit cwd/branch/exit code) | (unset) |
+| `ALIAST_NL_KEY` | Key that toggles NL mode (bindkey syntax) | `^ ` (Ctrl+Space) |
 | `ALIAST_SUGGESTION_STYLE` | Ghost text style: `dark`, `light`, `solarized` | `dark` |
 | `ALIAST_SUGGESTION_HIGHLIGHT` | Custom highlight spec (overrides style) | |
 | `ALIAST_LOG_LEVEL` | Daemon log level | `warn` |
