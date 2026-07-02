@@ -82,6 +82,14 @@ local ack='{"type":"ack","id":"r5"}'
 _aliast_response_type "$ack"; check "ack type extract" "ack" "$REPLY"
 _aliast_response_id "$ack";   check "ack id extract" "r5" "$REPLY"
 
+# --- wire writes must be byte-exact (plain `print` processes \" -> ") ---
+local wire_tmp="$(mktemp)" wfd
+exec {wfd}> "$wire_tmp"
+_aliast_send $wfd '{"cmd":"echo \"hi\" C:\\temp"}'
+exec {wfd}>&-
+check "send preserves escapes byte-exact" '{"cmd":"echo \"hi\" C:\\temp"}' "$(<"$wire_tmp")"
+rm -f "$wire_tmp"
+
 # --- id-matched response draining (the desync fix) ---
 # A stale response buffered ahead of the fresh one must be discarded, not rendered.
 local drain_tmp="$(mktemp)"

@@ -77,6 +77,14 @@ _aliast_response_msg() {
   _aliast_json_unescape "$r"
 }
 
+# Write one NDJSON request to a socket fd byte-exact. Plain `print` (like echo)
+# processes backslash escapes, turning the JSON escape \" into a raw " on the
+# wire -- the daemon then rejects any payload containing a quote. -r disables
+# that; -- guards against a leading dash.
+_aliast_send() {
+  print -r -u $1 -- "$2"
+}
+
 # Drain a socket fd until a response with the wanted id and type arrives,
 # discarding any stale/queued lines. Sets REPLY to the matched raw line and
 # returns 0, or clears REPLY and returns 1 on timeout/EOF. Fork-free: safe on
@@ -210,7 +218,7 @@ _aliast_request_suggestion() {
 
   local msg="{\"id\":\"${req_id}\",\"type\":\"complete\",\"buf\":\"${escaped_buffer}\",\"cur\":${CURSOR},\"cwd\":\"${escaped_cwd}\"${exit_field}${branch_field}}"
 
-  print -u $_ALIAST_FD "$msg" 2>/dev/null || {
+  _aliast_send $_ALIAST_FD "$msg" 2>/dev/null || {
     _aliast_reconnect
     return
   }
@@ -366,13 +374,13 @@ _aliast_nl_generate() {
     fi
 
     local msg="{\"id\":\"r${_ALIAST_REQ_ID}\",\"type\":\"generate\",\"prompt\":\"${escaped}\",\"cwd\":\"${escaped_cwd}\"${exit_field}${branch_field}}"
-    print -u $bg_fd "$msg" 2>/dev/null || { echo "error:send" > "$tmpfile"; exec {bg_fd}>&-; exit 1; }
+    _aliast_send $bg_fd "$msg" 2>/dev/null || { echo "error:send" > "$tmpfile"; exec {bg_fd}>&-; exit 1; }
 
     local line=""
     # Longer than the daemon's backend timeout (30s) so a slow generation surfaces
     # the daemon's specific error rather than this generic client-side timeout.
     read -r -u $bg_fd -t 35 line 2>/dev/null || { echo "error:timeout" > "$tmpfile"; exec {bg_fd}>&-; exit 1; }
-    echo "$line" > "$tmpfile"
+    print -r -- "$line" > "$tmpfile"   # -r: keep JSON \" escapes byte-exact
     exec {bg_fd}>&-
   } &
   local bg_pid=$!
@@ -528,7 +536,7 @@ _aliast_precmd_record() {
   # Send and drain the matching Ack to keep the socket buffer clean. Discarding
   # any stale suggestion line here stops it from being mistaken for this ack (and
   # stops the ack from polluting the next suggestion read).
-  print -u $_ALIAST_FD "$msg" 2>/dev/null || { _aliast_reconnect; return }
+  _aliast_send $_ALIAST_FD "$msg" 2>/dev/null || { _aliast_reconnect; return }
   _aliast_read_response "$_ALIAST_FD" "$req_id" "ack" 0.2
 }
 
