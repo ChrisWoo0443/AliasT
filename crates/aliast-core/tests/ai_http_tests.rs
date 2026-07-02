@@ -81,9 +81,12 @@ async fn ollama_generate_stream_emits_fragments_and_sanitized_final() {
     let server = MockServer::start().await;
     // Ollama streams one NDJSON object per fragment.
     let body = concat!(
-        r#"{"message":{"content":"```bash"}}"#, "\n",
-        r#"{"message":{"content":"\nls"}}"#, "\n",
-        r#"{"message":{"content":" -la\n```"}}"#, "\n",
+        r#"{"message":{"content":"```bash"}}"#,
+        "\n",
+        r#"{"message":{"content":"\nls"}}"#,
+        "\n",
+        r#"{"message":{"content":" -la\n```"}}"#,
+        "\n",
     );
     Mock::given(method("POST"))
         .and(path("/api/chat"))
