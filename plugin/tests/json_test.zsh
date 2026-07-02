@@ -111,6 +111,22 @@ check "drain leaves REPLY empty when no match" "" "$REPLY"
 exec {dfd}<&-
 rm -f "$drain_tmp"
 
+# --- async render guard (stale replies must not paint over a changed buffer) ---
+typeset -g BUFFER='git ch' POSTDISPLAY='' _ALIAST_INFLIGHT_BUF='git ch'
+typeset -g _ALIAST_GHOST_PAYLOAD='eckout main'
+typeset -ga region_highlight
+_aliast_render_ghost
+check "async render applies when buffer unchanged" "eckout main" "$POSTDISPLAY"
+
+BUFFER='git c'   # simulated backspace after the request went out
+_ALIAST_GHOST_PAYLOAD='SHOULD NOT RENDER'
+_aliast_render_ghost
+check "async render skipped when buffer changed" "eckout main" "$POSTDISPLAY"
+
+BUFFER='git ch'; _ALIAST_INFLIGHT_BUF='git ch'; _ALIAST_GHOST_PAYLOAD=''
+_aliast_render_ghost
+check "async render clears ghost on empty payload" "" "$POSTDISPLAY"
+
 print -r -- "---"
 print -r -- "$(( _count - _fail ))/$_count passed"
 exit $(( _fail > 0 ? 1 : 0 ))

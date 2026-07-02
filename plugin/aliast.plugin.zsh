@@ -23,6 +23,8 @@ typeset -g _ALIAST_NL_STATE="inactive"   # inactive | input | generating | revie
 typeset -g _ALIAST_NL_PROMPT=""           # Saved prompt for regeneration
 typeset -g _ALIAST_LAST_EXIT=""
 typeset -g _ALIAST_GIT_BRANCH=""
+typeset -ga _ALIAST_PENDING_CMDS _ALIAST_PENDING_CWDS _ALIAST_PENDING_EXITS
+typeset -g _ALIAST_INFLIGHT_ID=""   # id of the newest complete request (async)
 
 # ── JSON helpers (pure -- no ZLE/I/O, unit-tested in tests/json_test.zsh) ──
 # Results are returned in $REPLY to avoid a subprocess fork on the per-keystroke
@@ -105,18 +107,23 @@ _aliast_read_response() {
   return 1
 }
 
-# ── 3. Connection management (lazy -- no I/O at plugin load time) ───
+# ── 3. Connection management (lazy, non-blocking -- no polling, ever) ───
+# A failed connect spawns the daemon fire-and-forget and returns immediately;
+# the NEXT event (keystroke/precmd) picks up the connection once the daemon is
+# up. This keeps the cold-start window free of per-keystroke stalls.
+typeset -g _ALIAST_SPAWN_AT=-100
+
 _aliast_connect() {
   # Already connected
   [[ -n "$_ALIAST_FD" ]] && return 0
 
-  # Try connecting to existing daemon
+  # Try connecting to existing daemon (instant when the socket is absent)
   zsocket "$_ALIAST_SOCKET_PATH" 2>/dev/null && {
     _ALIAST_FD=$REPLY
     return 0
   }
 
-  # Daemon not running -- check if aliast binary is on PATH (avoids 500ms delay when missing)
+  # Daemon not running -- check if aliast binary is on PATH (avoids spawn attempts when missing)
   (( $+commands[aliast] )) || return 1
 
   # Respect an explicit `aliast stop`: while the marker exists, do not
@@ -124,29 +131,21 @@ _aliast_connect() {
   # the next prompt renders). `aliast start` clears the marker.
   [[ -e "${_ALIAST_SOCKET_PATH:h}/autostart-disabled" ]] && return 1
 
-  # Spawn daemon (fire-and-forget)
-  command aliast start &>/dev/null &!
-
-  # Poll for socket readiness (50ms intervals, 10 attempts = 500ms max)
-  local attempt=0
-  while (( attempt < 10 )); do
-    (( attempt++ ))
-    sleep 0.05
-    [[ -S "$_ALIAST_SOCKET_PATH" ]] || continue
-    zsocket "$_ALIAST_SOCKET_PATH" 2>/dev/null && {
-      _ALIAST_FD=$REPLY
-      return 0
-    }
-  done
-
-  # Daemon did not start in time -- silent failure
+  # Spawn daemon (fire-and-forget), at most once every few seconds so a broken
+  # install does not fork a launcher per keystroke. No waiting here.
+  if (( SECONDS - _ALIAST_SPAWN_AT >= 5 )); then
+    _ALIAST_SPAWN_AT=$SECONDS
+    command aliast start &>/dev/null &!
+  fi
   return 1
 }
 
 _aliast_disconnect() {
   [[ -z "$_ALIAST_FD" ]] && return
+  zle -F "$_ALIAST_FD" 2>/dev/null   # unregister the async handler, if any
   exec {_ALIAST_FD}>&-
   _ALIAST_FD=""
+  _ALIAST_INFLIGHT_ID=""
 }
 
 _aliast_reconnect() {
@@ -199,7 +198,11 @@ _aliast_clear_ghost() {
   POSTDISPLAY=""
 }
 
-# ── 5. IPC -- send request and read response synchronously ──────────
+# ── 5. IPC -- async: send the request, render when the reply arrives ─
+# The keystroke path never reads the socket. A zle -F watcher fires when the
+# daemon's reply lands, and renders it only if it is for the NEWEST request
+# (id match) and the buffer has not changed since (stale-render guard). Typing
+# latency is therefore independent of daemon latency.
 _aliast_request_suggestion() {
   _aliast_connect || return
 
@@ -228,17 +231,48 @@ _aliast_request_suggestion() {
     return
   }
 
-  # Read the response for THIS request, discarding any stale line left buffered
-  # by a prior timed-out read (id matching prevents permanent ghost-text desync).
-  if _aliast_read_response "$_ALIAST_FD" "$req_id" "suggestion" 0.1; then
-    _aliast_response_text "$REPLY"
-    if [[ -n "$REPLY" ]]; then
-      _aliast_show_ghost "$REPLY"
-    else
-      _aliast_clear_ghost
-    fi
-  fi
+  typeset -g _ALIAST_INFLIGHT_ID="$req_id"
+  typeset -g _ALIAST_INFLIGHT_BUF="$BUFFER"
+  zle -F $_ALIAST_FD _aliast_fd_handler 2>/dev/null
 }
+
+# zle -F watcher: runs when the socket becomes readable while the line editor
+# is waiting for input. Not a widget itself, so all editor-state changes go
+# through the _aliast_render_ghost widget.
+_aliast_fd_handler() {
+  local fd="$1" line="" consumed=0
+  while read -r -u $fd -t 0 line; do
+    consumed=1
+    _aliast_response_type "$line"
+    [[ "$REPLY" == "suggestion" ]] || continue   # drop acks/stray frames
+    _aliast_response_id "$line"
+    [[ "$REPLY" == "$_ALIAST_INFLIGHT_ID" ]] || continue   # drop stale replies
+    _aliast_response_text "$line"
+    typeset -g _ALIAST_GHOST_PAYLOAD="$REPLY"
+    zle _aliast_render_ghost 2>/dev/null
+  done
+  if (( ! consumed )); then
+    # Readable but nothing to read: the daemon closed the connection. Drop the
+    # fd (also unregisters this handler) so the next keystroke reconnects.
+    _aliast_disconnect
+  fi
+  return 0
+}
+
+# Widget: apply the async suggestion, unless the buffer moved on since the
+# request was sent (e.g. backspace, which triggers no new request).
+_aliast_render_ghost() {
+  if [[ "$BUFFER" != "$_ALIAST_INFLIGHT_BUF" ]]; then
+    return 0
+  fi
+  if [[ -n "$_ALIAST_GHOST_PAYLOAD" ]]; then
+    _aliast_show_ghost "$_ALIAST_GHOST_PAYLOAD"
+  else
+    _aliast_clear_ghost
+  fi
+  zle -R
+}
+zle -N _aliast_render_ghost
 
 # ── 6. Widget wrappers (minimal) ────────────────────────────────────
 # Use .self-insert / .accept-line (dot-prefixed builtins) to avoid
@@ -529,20 +563,47 @@ _aliast_precmd_record() {
   [[ "$cmd" == "$_ALIAST_LAST_RECORDED" ]] && return
   typeset -g _ALIAST_LAST_RECORDED="$cmd"
 
-  _aliast_connect || return
+  if ! _aliast_connect; then
+    # Daemon still starting (cold-start window): buffer the record so it is not
+    # lost, and flush on the next prompt once connected. Bounded so a dead
+    # daemon cannot grow the arrays forever.
+    if (( ${#_ALIAST_PENDING_CMDS} < 20 )); then
+      _ALIAST_PENDING_CMDS+=("$cmd")
+      _ALIAST_PENDING_CWDS+=("$PWD")
+      _ALIAST_PENDING_EXITS+=("$last_exit_code")
+    fi
+    return
+  fi
 
-  _aliast_json_escape "$cmd"; local escaped_cmd="$REPLY"
-  _aliast_json_escape "$PWD"; local escaped_cwd="$REPLY"
+  # Flush any records buffered while the daemon was starting.
+  if (( ${#_ALIAST_PENDING_CMDS} > 0 )); then
+    local -i pending_index
+    for (( pending_index = 1; pending_index <= ${#_ALIAST_PENDING_CMDS}; pending_index++ )); do
+      _aliast_send_record \
+        "${_ALIAST_PENDING_CMDS[pending_index]}" \
+        "${_ALIAST_PENDING_CWDS[pending_index]}" \
+        "${_ALIAST_PENDING_EXITS[pending_index]}" || break
+    done
+    _ALIAST_PENDING_CMDS=() _ALIAST_PENDING_CWDS=() _ALIAST_PENDING_EXITS=()
+  fi
+
+  _aliast_send_record "$cmd" "$PWD" "$last_exit_code"
+}
+
+# Send one record request and drain its Ack (id-matched, so a stale suggestion
+# line cannot be mistaken for the ack, nor the ack pollute a suggestion read).
+_aliast_send_record() {
+  local record_cmd="$1" record_cwd="$2" record_exit="$3"
+  _aliast_json_escape "$record_cmd"; local escaped_cmd="$REPLY"
+  _aliast_json_escape "$record_cwd"; local escaped_cwd="$REPLY"
 
   (( _ALIAST_REQ_ID++ ))
   local req_id="r${_ALIAST_REQ_ID}"
-  local msg="{\"id\":\"${req_id}\",\"type\":\"record\",\"cmd\":\"${escaped_cmd}\",\"cwd\":\"${escaped_cwd}\",\"exit_code\":${last_exit_code}}"
+  local msg="{\"id\":\"${req_id}\",\"type\":\"record\",\"cmd\":\"${escaped_cmd}\",\"cwd\":\"${escaped_cwd}\",\"exit_code\":${record_exit}}"
 
-  # Send and drain the matching Ack to keep the socket buffer clean. Discarding
-  # any stale suggestion line here stops it from being mistaken for this ack (and
-  # stops the ack from polluting the next suggestion read).
-  _aliast_send $_ALIAST_FD "$msg" 2>/dev/null || { _aliast_reconnect; return }
+  _aliast_send $_ALIAST_FD "$msg" 2>/dev/null || { _aliast_reconnect; return 1 }
   _aliast_read_response "$_ALIAST_FD" "$req_id" "ack" 0.2
+  return 0
 }
 
 autoload -Uz add-zsh-hook

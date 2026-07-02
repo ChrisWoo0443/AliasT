@@ -63,7 +63,11 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Start the daemon, listening on the specified socket path.
-    Start,
+    Start {
+        /// Run in the foreground instead of daemonizing.
+        #[arg(long)]
+        foreground: bool,
+    },
     /// Stop a running daemon.
     Stop,
     /// Check daemon status.
@@ -167,9 +171,56 @@ async fn main() -> Result<()> {
     let socket_path = cli.socket.unwrap_or_else(lifecycle::default_socket_path);
 
     match cli.command {
-        Commands::Start => {
+        Commands::Start { foreground } => {
             // An explicit start always re-enables plugin auto-start.
             lifecycle::enable_autostart(&socket_path);
+
+            // Default: daemonize. Re-exec ourselves detached (new session, null
+            // stdio) with --foreground, wait until the child is serving, and
+            // exit -- so `aliast start` does not capture the user's terminal.
+            if !foreground {
+                if std::os::unix::net::UnixStream::connect(&socket_path).is_ok() {
+                    eprintln!("aliast: daemon is already running");
+                    std::process::exit(1);
+                }
+
+                let exe = std::env::current_exe()?;
+                let mut command = std::process::Command::new(exe);
+                command
+                    .arg("start")
+                    .arg("--foreground")
+                    .arg("--socket")
+                    .arg(&socket_path)
+                    .stdin(std::process::Stdio::null())
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null());
+                #[cfg(unix)]
+                unsafe {
+                    use std::os::unix::process::CommandExt;
+                    command.pre_exec(|| {
+                        // Detach from the controlling terminal so closing it
+                        // does not SIGHUP the daemon.
+                        if libc::setsid() == -1 {
+                            return Err(std::io::Error::last_os_error());
+                        }
+                        Ok(())
+                    });
+                }
+                command.spawn()?;
+
+                // Wait (bounded) for the child to bind before reporting success.
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+                while std::time::Instant::now() < deadline {
+                    if std::os::unix::net::UnixStream::connect(&socket_path).is_ok() {
+                        println!("aliast: daemon started");
+                        return Ok(());
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(25));
+                }
+                eprintln!("aliast: daemon did not start within 5s (check the log)");
+                std::process::exit(1);
+            }
+
             tracing::info!(?socket_path, "starting daemon");
 
             // Initialize HistoryStore at ~/.local/share/aliast/history.db
