@@ -75,3 +75,30 @@ async fn openai_generate_errors_on_empty_choices() {
         AiError::GenerationFailed(_)
     ));
 }
+
+#[tokio::test]
+async fn ollama_generate_stream_emits_fragments_and_sanitized_final() {
+    let server = MockServer::start().await;
+    // Ollama streams one NDJSON object per fragment.
+    let body = concat!(
+        r#"{"message":{"content":"```bash"}}"#, "\n",
+        r#"{"message":{"content":"\nls"}}"#, "\n",
+        r#"{"message":{"content":" -la\n```"}}"#, "\n",
+    );
+    Mock::given(method("POST"))
+        .and(path("/api/chat"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(body))
+        .mount(&server)
+        .await;
+
+    let backend = OllamaBackend::with_base_url("llama3.2".to_string(), server.uri());
+    let (tx, mut rx) = tokio::sync::mpsc::channel(8);
+    let final_command = backend.generate_stream("list files", tx).await.unwrap();
+
+    let mut fragments = Vec::new();
+    while let Ok(fragment) = rx.try_recv() {
+        fragments.push(fragment);
+    }
+    assert_eq!(fragments, vec!["```bash", "\nls", " -la\n```"]);
+    assert_eq!(final_command, "ls -la", "final result must be sanitized");
+}

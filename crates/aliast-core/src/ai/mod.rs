@@ -68,6 +68,18 @@ pub trait AiBackend: Send + Sync {
     /// Generate a shell command from a natural language prompt.
     async fn generate(&self, prompt: &str) -> Result<String, AiError>;
 
+    /// Generate a shell command, emitting raw text fragments on `chunk_tx` as
+    /// they arrive, and returning the final sanitized command. Backends without
+    /// streaming support fall back to [`generate`](Self::generate) (no chunks).
+    async fn generate_stream(
+        &self,
+        prompt: &str,
+        chunk_tx: tokio::sync::mpsc::Sender<String>,
+    ) -> Result<String, AiError> {
+        let _ = chunk_tx; // default: non-streaming fallback
+        self.generate(prompt).await
+    }
+
     /// Check whether the backend is reachable and operational.
     async fn health_check(&self) -> Result<(), AiError>;
 

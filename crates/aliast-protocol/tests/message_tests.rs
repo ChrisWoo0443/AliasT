@@ -576,3 +576,13 @@ fn accept_request_deserializes() {
         }
     );
 }
+
+#[test]
+fn command_chunk_response_serializes() {
+    let response = Response::CommandChunk {
+        id: "r1".to_string(),
+        text: "ls -".to_string(),
+    };
+    let json = serde_json::to_string(&response).unwrap();
+    assert_eq!(json, r#"{"type":"command_chunk","id":"r1","text":"ls -"}"#);
+}

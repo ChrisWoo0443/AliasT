@@ -792,3 +792,82 @@ async fn test_get_status_no_backend() {
     cancel_token.cancel();
     assert!(result.is_ok(), "test timed out");
 }
+
+/// Mock backend that streams two chunks before returning the full command.
+struct StreamingMockBackend;
+
+#[async_trait]
+impl AiBackend for StreamingMockBackend {
+    async fn generate(&self, _prompt: &str) -> Result<String, AiError> {
+        Ok("ls -la".to_string())
+    }
+
+    async fn generate_stream(
+        &self,
+        _prompt: &str,
+        chunk_tx: tokio::sync::mpsc::Sender<String>,
+    ) -> Result<String, AiError> {
+        let _ = chunk_tx.send("ls ".to_string()).await;
+        let _ = chunk_tx.send("-la".to_string()).await;
+        Ok("ls -la".to_string())
+    }
+
+    async fn health_check(&self) -> Result<(), AiError> {
+        Ok(())
+    }
+
+    fn name(&self) -> &str {
+        "streaming-mock"
+    }
+}
+
+#[tokio::test]
+async fn test_generate_streams_chunks_then_final_command() {
+    let (socket_path, cancel_token, _temp_dir) =
+        spawn_daemon_with_ai(Arc::new(StreamingMockBackend)).await;
+
+    let result = timeout(Duration::from_secs(5), async {
+        let mut stream = UnixStream::connect(&socket_path).await.unwrap();
+        let (reader, mut writer) = stream.split();
+        let mut buf_reader = BufReader::new(reader);
+
+        writer
+            .write_all(b"{\"type\":\"generate\",\"id\":\"g1\",\"prompt\":\"list\"}\n")
+            .await
+            .unwrap();
+
+        let mut lines = Vec::new();
+        loop {
+            let mut line = String::new();
+            buf_reader.read_line(&mut line).await.unwrap();
+            let parsed: Response = serde_json::from_str(line.trim()).unwrap();
+            let done = matches!(parsed, Response::Command { .. });
+            lines.push(parsed);
+            if done {
+                break;
+            }
+        }
+
+        assert_eq!(
+            lines,
+            vec![
+                Response::CommandChunk {
+                    id: "g1".to_string(),
+                    text: "ls ".to_string()
+                },
+                Response::CommandChunk {
+                    id: "g1".to_string(),
+                    text: "-la".to_string()
+                },
+                Response::Command {
+                    id: "g1".to_string(),
+                    text: "ls -la".to_string()
+                },
+            ]
+        );
+    })
+    .await;
+
+    cancel_token.cancel();
+    assert!(result.is_ok(), "test timed out");
+}

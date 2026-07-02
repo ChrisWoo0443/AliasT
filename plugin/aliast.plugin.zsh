@@ -475,16 +475,29 @@ _aliast_nl_generate() {
     local msg="{\"id\":\"r${_ALIAST_REQ_ID}\",\"type\":\"generate\",\"prompt\":\"${escaped}\",\"cwd\":\"${escaped_cwd}\"${exit_field}${branch_field}}"
     _aliast_send $bg_fd "$msg" 2>/dev/null || { echo "error:send" > "$tmpfile"; exec {bg_fd}>&-; exit 1; }
 
-    local line=""
-    # Longer than the daemon's backend timeout (30s) so a slow generation surfaces
-    # the daemon's specific error rather than this generic client-side timeout.
-    read -r -u $bg_fd -t 35 line 2>/dev/null || { echo "error:timeout" > "$tmpfile"; exec {bg_fd}>&-; exit 1; }
-    print -r -- "$line" > "$tmpfile"   # -r: keep JSON \" escapes byte-exact
+    # Read frames until the final command/error. Streaming backends emit
+    # command_chunk frames first; each is appended to the .partial file so the
+    # foreground spinner can render the command as it is generated.
+    local line="" accumulated=""
+    while true; do
+      # Per-frame timeout, longer than the daemon's backend timeout (30s) so a
+      # slow generation surfaces the daemon's specific error, not this generic one.
+      read -r -u $bg_fd -t 35 line 2>/dev/null || { echo "error:timeout" > "$tmpfile"; exec {bg_fd}>&-; exit 1; }
+      _aliast_response_type "$line"
+      if [[ "$REPLY" == "command_chunk" ]]; then
+        _aliast_response_text "$line"
+        accumulated+="$REPLY"
+        print -r -- "$accumulated" > "${tmpfile}.partial"
+        continue
+      fi
+      print -r -- "$line" > "$tmpfile"   # -r: keep JSON \" escapes byte-exact
+      break
+    done
     exec {bg_fd}>&-
   } &
   local bg_pid=$!
 
-  # Foreground: spinner — clear buffer and show spinner in PREDISPLAY
+  # Foreground: spinner — stream partial output into the buffer as it arrives
   BUFFER=""
   CURSOR=0
   local spinner_chars='/-\|'
@@ -492,13 +505,18 @@ _aliast_nl_generate() {
 
   while kill -0 $bg_pid 2>/dev/null; do
     PREDISPLAY="[${spinner_chars:$((frame % 4)):1}] "
-    BUFFER=""
+    if [[ -s "${tmpfile}.partial" ]]; then
+      BUFFER="$(<"${tmpfile}.partial")"
+      CURSOR=$#BUFFER
+    else
+      BUFFER=""
+    fi
     zle -R
     read -t 0.1 -k 1 key < /dev/tty 2>/dev/null
     if [[ "$key" == $'\e' ]]; then
       kill $bg_pid 2>/dev/null
       wait $bg_pid 2>/dev/null
-      rm -f "$tmpfile"
+      rm -f "$tmpfile" "${tmpfile}.partial"
       # Back to NL input
       _ALIAST_NL_STATE="input"
       _aliast_nl_set_indicator
@@ -510,6 +528,7 @@ _aliast_nl_generate() {
     ((frame++))
   done
   wait $bg_pid 2>/dev/null
+  rm -f "${tmpfile}.partial"
 
   # Read result from tmpfile
   local result

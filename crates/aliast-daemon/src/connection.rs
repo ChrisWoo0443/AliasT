@@ -66,6 +66,12 @@ pub async fn handle_connection(
                             state.cancel_token.cancel();
                             break;
                         }
+                        // Generate is handled inline too: streaming chunks need
+                        // writer access between the request and final response.
+                        if matches!(&request, Request::Generate { .. }) {
+                            handle_generate(request, &mut writer, &state).await?;
+                            continue;
+                        }
                         dispatch_request(request, &state).await
                     }
                     Err(parse_error) => Response::Error {
@@ -117,6 +123,110 @@ pub fn enrich_prompt(
         parts.join("\n"),
         prompt
     )
+}
+
+/// Writes one NDJSON response line.
+async fn write_response(
+    writer: &mut tokio::net::unix::OwnedWriteHalf,
+    response: &Response,
+) -> Result<()> {
+    let mut response_json = serde_json::to_string(response)?;
+    response_json.push('\n');
+    writer.write_all(response_json.as_bytes()).await?;
+    writer.flush().await?;
+    Ok(())
+}
+
+/// Handles a Generate request with streaming: forwards backend chunks as
+/// `command_chunk` frames, then writes the final `command` (or `error`).
+async fn handle_generate(
+    request: Request,
+    writer: &mut tokio::net::unix::OwnedWriteHalf,
+    state: &DaemonState,
+) -> Result<()> {
+    let Request::Generate {
+        id,
+        prompt,
+        cwd,
+        exit_code,
+        git_branch,
+    } = request
+    else {
+        unreachable!("handle_generate called with a non-Generate request");
+    };
+
+    if !state.enabled.load(Ordering::Relaxed) {
+        return write_response(
+            writer,
+            &Response::Error {
+                id,
+                msg: "aliast is paused. Run `aliast on` to resume.".to_string(),
+            },
+        )
+        .await;
+    }
+
+    let Some(backend) = &state.ai_backend else {
+        return write_response(
+            writer,
+            &Response::Error {
+                id,
+                msg: "No AI model configured. Set ALIAST_NL_MODEL env var.".to_string(),
+            },
+        )
+        .await;
+    };
+
+    // Opt out of sending cwd/git-branch/exit-code context to the cloud
+    // provider by setting ALIAST_NL_NO_CONTEXT.
+    let no_context = std::env::var("ALIAST_NL_NO_CONTEXT")
+        .map(|value| !value.is_empty())
+        .unwrap_or(false);
+    let enriched = if no_context {
+        prompt.clone()
+    } else {
+        enrich_prompt(&prompt, cwd.as_deref(), exit_code, git_branch.as_deref())
+    };
+
+    let (chunk_tx, mut chunk_rx) = tokio::sync::mpsc::channel::<String>(32);
+    let generation = backend.generate_stream(&enriched, chunk_tx);
+    tokio::pin!(generation);
+
+    let result = loop {
+        tokio::select! {
+            maybe_chunk = chunk_rx.recv() => {
+                match maybe_chunk {
+                    Some(text) => {
+                        write_response(writer, &Response::CommandChunk { id: id.clone(), text }).await?;
+                    }
+                    // Channel closed: the generator is done sending (or never
+                    // streamed). Stop selecting on it and await the result,
+                    // otherwise a closed channel would busy-spin this loop.
+                    None => break (&mut generation).await,
+                }
+            }
+            result = &mut generation => {
+                // Drain any chunks queued before completion so the final
+                // `command` frame is always last on the wire.
+                while let Ok(text) = chunk_rx.try_recv() {
+                    write_response(writer, &Response::CommandChunk { id: id.clone(), text }).await?;
+                }
+                break result;
+            }
+        }
+    };
+
+    let response = match result {
+        Ok(command_text) => Response::Command {
+            id,
+            text: command_text,
+        },
+        Err(err) => Response::Error {
+            id,
+            msg: err.to_string(),
+        },
+    };
+    write_response(writer, &response).await
 }
 
 /// Dispatches a parsed request to the appropriate handler.
@@ -190,46 +300,12 @@ async fn dispatch_request(request: Request, state: &DaemonState) -> Response {
             }
             Response::Ack { id }
         }
-        Request::Generate {
-            id,
-            prompt,
-            cwd,
-            exit_code,
-            git_branch,
-        } => {
-            if !state.enabled.load(Ordering::Relaxed) {
-                return Response::Error {
-                    id,
-                    msg: "aliast is paused. Run `aliast on` to resume.".to_string(),
-                };
-            }
-            match &state.ai_backend {
-                Some(backend) => {
-                    // Opt out of sending cwd/git-branch/exit-code context to the
-                    // cloud provider by setting ALIAST_NL_NO_CONTEXT.
-                    let no_context = std::env::var("ALIAST_NL_NO_CONTEXT")
-                        .map(|value| !value.is_empty())
-                        .unwrap_or(false);
-                    let enriched = if no_context {
-                        prompt.clone()
-                    } else {
-                        enrich_prompt(&prompt, cwd.as_deref(), exit_code, git_branch.as_deref())
-                    };
-                    match backend.generate(&enriched).await {
-                        Ok(command_text) => Response::Command {
-                            id,
-                            text: command_text,
-                        },
-                        Err(err) => Response::Error {
-                            id,
-                            msg: err.to_string(),
-                        },
-                    }
-                }
-                None => Response::Error {
-                    id,
-                    msg: "No AI model configured. Set ALIAST_NL_MODEL env var.".to_string(),
-                },
+        Request::Generate { id, .. } => {
+            // Generate is handled inline by handle_generate (streaming needs
+            // writer access). This arm is unreachable but kept for completeness.
+            Response::Error {
+                id,
+                msg: "internal: generate must be handled by handle_generate".to_string(),
             }
         }
         Request::Shutdown { id } => {

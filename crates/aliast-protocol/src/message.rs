@@ -151,6 +151,16 @@ pub enum Response {
         text: String,
     },
 
+    /// An incremental fragment of a command being generated (streaming).
+    /// Zero or more chunks precede the final `command` response.
+    #[serde(rename = "command_chunk")]
+    CommandChunk {
+        /// Request identifier this response corresponds to.
+        id: String,
+        /// The next fragment of generated text (raw, unsanitized).
+        text: String,
+    },
+
     /// Acknowledgement that the daemon is shutting down.
     #[serde(rename = "shutting_down")]
     ShuttingDown {
