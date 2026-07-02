@@ -30,13 +30,16 @@ async fn start_test_server() -> (std::path::PathBuf, CancellationToken, tempfile
         model_name: String::new(),
     };
 
+    // Bind synchronously BEFORE spawning: the listener is ready the moment this
+    // returns, so tests need no sleep and cannot race the accept loop on slow
+    // CI runners (queued connections are held in the listener backlog).
+    let listener = server::bind(&socket_path).unwrap();
     let server_path = socket_path.clone();
     tokio::spawn(async move {
-        server::run_server(&server_path, state).await.unwrap();
+        server::run_server_with_listener(listener, &server_path, state)
+            .await
+            .unwrap();
     });
-
-    // Wait briefly for the server to start listening
-    tokio::time::sleep(Duration::from_millis(50)).await;
 
     (socket_path, cancel_token, temp_dir)
 }
@@ -190,12 +193,13 @@ async fn server_shuts_down_on_cancellation_token() {
     );
     drop(stream);
 
-    // Cancel the server
+    // Cancel the server, then poll (bounded) for cleanup instead of trusting a
+    // fixed sleep -- slow runners need longer, fast ones shouldn't wait.
     cancel_token.cancel();
-    tokio::time::sleep(Duration::from_millis(100)).await;
-
-    // Server should have cleaned up -- socket file should be removed
-    // Note: connection might still succeed briefly due to race, so we check socket file
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    while socket_path.exists() && tokio::time::Instant::now() < deadline {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
     assert!(
         !socket_path.exists(),
         "socket file should be removed after shutdown"

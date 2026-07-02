@@ -1,3 +1,4 @@
+use aliast_daemon::doctor;
 use aliast_daemon::doctor::{
     check_ai_backend_configured_with, check_api_key_present_with, check_daemon_running,
     check_daemon_running_at, check_history_db_at,
@@ -110,4 +111,40 @@ fn test_doctor_check_fix_none_when_passed() {
     let check = check_api_key_present_with("ollama", false, false);
     assert!(check.passed);
     assert!(check.fix.is_none(), "fix should be None when check passes");
+}
+
+#[test]
+fn env_matches_daemon_passes_when_identical() {
+    let check = doctor::check_env_matches_daemon_with("ollama", "llama3.2", "ollama", "llama3.2");
+    assert!(check.passed, "{}", check.detail);
+}
+
+#[test]
+fn env_matches_daemon_fails_on_backend_mismatch() {
+    let check = doctor::check_env_matches_daemon_with("ollama", "llama3.2", "claude", "sonnet");
+    assert!(!check.passed);
+    assert!(
+        check.detail.contains("ollama") && check.detail.contains("claude"),
+        "detail should name both sides: {}",
+        check.detail
+    );
+    assert!(
+        check.fix.as_deref().unwrap_or("").contains("aliast stop"),
+        "fix should say to restart the daemon"
+    );
+}
+
+#[test]
+fn env_matches_daemon_fails_when_daemon_unconfigured_but_shell_is() {
+    let check = doctor::check_env_matches_daemon_with("none", "", "ollama", "llama3.2");
+    assert!(
+        !check.passed,
+        "daemon without a model while shell has one is the classic stale-env trap"
+    );
+}
+
+#[test]
+fn env_matches_daemon_passes_when_both_unconfigured() {
+    let check = doctor::check_env_matches_daemon_with("none", "", "ollama", "");
+    assert!(check.passed, "{}", check.detail);
 }

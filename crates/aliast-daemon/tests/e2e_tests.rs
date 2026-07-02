@@ -75,13 +75,15 @@ async fn spawn_daemon() -> (std::path::PathBuf, CancellationToken, tempfile::Tem
         model_name: String::new(),
     };
 
+    // Bind synchronously BEFORE spawning so the listener is ready when this
+    // helper returns -- no sleep, no readiness race on slow CI runners.
+    let listener = server::bind(&socket_path).unwrap();
     let server_path = socket_path.clone();
     tokio::spawn(async move {
-        server::run_server(&server_path, state).await.unwrap();
+        server::run_server_with_listener(listener, &server_path, state)
+            .await
+            .unwrap();
     });
-
-    // Wait for server to bind the socket
-    tokio::time::sleep(Duration::from_millis(100)).await;
 
     (socket_path, cancel_token, temp_dir)
 }
@@ -109,13 +111,15 @@ async fn spawn_daemon_with_ai(
         model_name: "test-model".to_string(),
     };
 
+    // Bind synchronously BEFORE spawning so the listener is ready when this
+    // helper returns -- no sleep, no readiness race on slow CI runners.
+    let listener = server::bind(&socket_path).unwrap();
     let server_path = socket_path.clone();
     tokio::spawn(async move {
-        server::run_server(&server_path, state).await.unwrap();
+        server::run_server_with_listener(listener, &server_path, state)
+            .await
+            .unwrap();
     });
-
-    // Wait for server to bind the socket
-    tokio::time::sleep(Duration::from_millis(100)).await;
 
     (socket_path, cancel_token, temp_dir)
 }
@@ -544,15 +548,18 @@ async fn test_shutdown_via_protocol() {
             other => panic!("expected ShuttingDown, got {:?}", other),
         }
 
-        // Wait briefly for daemon to shut down
-        tokio::time::sleep(Duration::from_millis(200)).await;
-
-        // Verify daemon is no longer reachable
-        let connect_result = UnixStream::connect(&socket_path).await;
-        assert!(
-            connect_result.is_err(),
-            "daemon should be unreachable after shutdown"
-        );
+        // Poll (bounded) until the daemon is unreachable instead of trusting a
+        // fixed sleep on a slow runner.
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(4);
+        let mut reachable = true;
+        while tokio::time::Instant::now() < deadline {
+            if UnixStream::connect(&socket_path).await.is_err() {
+                reachable = false;
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert!(!reachable, "daemon should be unreachable after shutdown");
     })
     .await;
 

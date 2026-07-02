@@ -29,6 +29,7 @@ pub async fn run_doctor_checks() -> Vec<DoctorCheck> {
     checks.push(check_ollama_reachable().await);
     checks.push(check_api_key_valid().await);
     checks.push(check_history_db());
+    checks.push(check_env_matches_daemon());
     checks
 }
 
@@ -332,6 +333,115 @@ async fn check_api_key_valid() -> DoctorCheck {
                 fix: None,
             }
         }
+    }
+}
+
+/// Check 7: The running daemon's AI config matches this shell's env.
+///
+/// The daemon captures ALIAST_NL_* once at startup; a daemon started before
+/// the user exported them silently disagrees with a green shell-env report.
+/// This check asks the daemon (get_status) and compares precisely.
+pub fn check_env_matches_daemon() -> DoctorCheck {
+    let socket_path = lifecycle::default_socket_path();
+
+    let response = (|| -> std::io::Result<String> {
+        use std::io::{BufRead, Write};
+        let stream = std::os::unix::net::UnixStream::connect(&socket_path)?;
+        stream.set_read_timeout(Some(Duration::from_secs(3)))?;
+        let mut writer = std::io::BufWriter::new(&stream);
+        writer.write_all(b"{\"id\":\"doctor-status\",\"type\":\"get_status\"}\n")?;
+        writer.flush()?;
+        let mut line = String::new();
+        std::io::BufReader::new(&stream).read_line(&mut line)?;
+        Ok(line)
+    })();
+
+    let line = match response {
+        Ok(line) => line,
+        Err(_) => {
+            return DoctorCheck {
+                name: "Daemon env matches shell",
+                passed: true,
+                detail: "Skipped -- daemon not running".to_string(),
+                fix: None,
+            };
+        }
+    };
+
+    let parsed: serde_json::Value = match serde_json::from_str(&line) {
+        Ok(value) => value,
+        Err(_) => {
+            return DoctorCheck {
+                name: "Daemon env matches shell",
+                passed: false,
+                detail: "Daemon returned an unparseable status response".to_string(),
+                fix: Some("Restart the daemon: aliast stop && aliast start".to_string()),
+            };
+        }
+    };
+    let daemon_backend = parsed["backend"].as_str().unwrap_or("none");
+    let daemon_model = parsed["model"].as_str().unwrap_or("");
+
+    let shell_backend = std::env::var("ALIAST_NL_BACKEND").unwrap_or_else(|_| "ollama".to_string());
+    let shell_model = std::env::var("ALIAST_NL_MODEL").unwrap_or_default();
+
+    check_env_matches_daemon_with(daemon_backend, daemon_model, &shell_backend, &shell_model)
+}
+
+/// Testable variant that compares daemon-reported config against shell env.
+pub fn check_env_matches_daemon_with(
+    daemon_backend: &str,
+    daemon_model: &str,
+    shell_backend: &str,
+    shell_model: &str,
+) -> DoctorCheck {
+    // Normalize: a shell with no model means NL mode is unconfigured regardless
+    // of the backend name, which is what a daemon reports as "none".
+    let shell_effective_backend = if shell_model.is_empty() {
+        "none"
+    } else {
+        shell_backend
+    };
+
+    if daemon_backend == shell_effective_backend && daemon_model == shell_model {
+        let detail = if daemon_backend == "none" {
+            "Daemon and shell agree: NL mode unconfigured".to_string()
+        } else {
+            format!(
+                "Daemon and shell agree: {} ({})",
+                daemon_backend, daemon_model
+            )
+        };
+        return DoctorCheck {
+            name: "Daemon env matches shell",
+            passed: true,
+            detail,
+            fix: None,
+        };
+    }
+
+    DoctorCheck {
+        name: "Daemon env matches shell",
+        passed: false,
+        detail: format!(
+            "Daemon is running with {} ({}) but this shell has {} ({}) -- the daemon read its env at startup",
+            daemon_backend,
+            if daemon_model.is_empty() {
+                "no model"
+            } else {
+                daemon_model
+            },
+            shell_effective_backend,
+            if shell_model.is_empty() {
+                "no model"
+            } else {
+                shell_model
+            },
+        ),
+        fix: Some(
+            "Restart the daemon to pick up this shell's env: aliast stop && aliast start"
+                .to_string(),
+        ),
     }
 }
 
