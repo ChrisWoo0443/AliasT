@@ -141,6 +141,33 @@ check "safe: grep rf flagless"    "no"  "$(danger 'grep -rn foo .')"
 check "safe: curl download"       "no"  "$(danger 'curl -O https://x/y.tar.gz')"
 check "safe: echo sudoku"         "no"  "$(danger 'echo sudoku time')"
 
+# --- Escape fallback must respect vi mode (bindkey -v) ---
+# Outside NL mode, bare Escape must enter vi command mode for vi users instead
+# of send-break, which would make vi command mode unreachable.
+typeset -ga _zle_calls
+zle() { _zle_calls+=("$*") }
+
+_ALIAST_NL_STATE="inactive"
+
+_zle_calls=(); KEYMAP=viins
+_aliast_nl_escape
+check "escape fallback: viins enters vi command mode" ".vi-cmd-mode" "${_zle_calls[-1]}"
+
+_zle_calls=(); KEYMAP=main   # emacs users: main not linked to viins
+bindkey() { [[ "$1" == "-lL" ]] && print -r -- "bindkey -A emacs main" }
+_aliast_nl_escape
+check "escape fallback: emacs keeps send-break" "send-break" "${_zle_calls[-1]}"
+
+_zle_calls=(); KEYMAP=main   # vi users: main linked to viins
+bindkey() { [[ "$1" == "-lL" ]] && print -r -- "bindkey -A viins main" }
+_aliast_nl_escape
+check "escape fallback: main linked to viins enters vi command mode" ".vi-cmd-mode" "${_zle_calls[-1]}"
+
+# Restore inert stubs for any later tests.
+zle() { return 0 }
+bindkey() { return 0 }
+unset KEYMAP
+
 # --- ALIAST_NL_KEY override reaches bindkey ---
 local nl_key_binding
 nl_key_binding=$(zsh -f -c '

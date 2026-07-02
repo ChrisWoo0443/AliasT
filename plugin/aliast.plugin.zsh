@@ -613,7 +613,15 @@ _aliast_nl_escape() {
     # Escape in input → exit NL mode
     _aliast_nl_deactivate
   else
-    zle send-break
+    # Bare Escape outside NL mode must keep its native meaning. For vi-mode
+    # users (bindkey -v) that is entering command mode -- send-break here would
+    # make vi command mode unreachable. The fork only happens on a lone Escape
+    # press outside NL mode, never on the keystroke hot path.
+    if [[ "$KEYMAP" == vi* || "$(bindkey -lL main 2>/dev/null)" == *viins* ]]; then
+      zle .vi-cmd-mode
+    else
+      zle send-break
+    fi
   fi
 }
 zle -N _aliast_nl_escape
