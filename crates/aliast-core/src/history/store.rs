@@ -224,7 +224,7 @@ impl HistoryStore {
                         WHEN :cwd != '' AND SUM(CASE WHEN cwd = :cwd THEN 1 ELSE 0 END) > 0 THEN 20
                         ELSE 0
                     END AS directory_bonus,
-                    -- Exit code penalty: -15 if majority of executions failed
+                    -- Exit code penalty: -40 if majority of executions failed
                     CASE
                         WHEN SUM(CASE WHEN exit_code IS NOT NULL AND exit_code != 0 THEN 1 ELSE 0 END) * 2 > COUNT(CASE WHEN exit_code IS NOT NULL THEN 1 END) THEN -40
                         ELSE 0
