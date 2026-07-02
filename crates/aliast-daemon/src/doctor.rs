@@ -60,7 +60,7 @@ pub fn print_doctor_report(checks: &[DoctorCheck]) {
     println!("Note: Doctor reads env vars from the current shell session.");
     println!("The running daemon may have different values if it was started");
     println!("in a different shell or before these variables were set --");
-    println!("run `aliast stop && aliast start` after changing ALIAST_NL_* vars.");
+    println!("run `aliast restart` after changing ALIAST_NL_* vars.");
 }
 
 /// Check 1: Daemon running -- probe socket with sync UnixStream.
@@ -375,7 +375,7 @@ pub fn check_env_matches_daemon() -> DoctorCheck {
                 name: "Daemon env matches shell",
                 passed: false,
                 detail: "Daemon returned an unparseable status response".to_string(),
-                fix: Some("Restart the daemon: aliast stop && aliast start".to_string()),
+                fix: Some("Restart the daemon: aliast restart".to_string()),
             };
         }
     };
@@ -438,10 +438,7 @@ pub fn check_env_matches_daemon_with(
                 shell_model
             },
         ),
-        fix: Some(
-            "Restart the daemon to pick up this shell's env: aliast stop && aliast start"
-                .to_string(),
-        ),
+        fix: Some("Restart the daemon to pick up this shell's env: aliast restart".to_string()),
     }
 }
 

@@ -70,6 +70,8 @@ enum Commands {
     },
     /// Stop a running daemon.
     Stop,
+    /// Restart the daemon (stop if running, then start).
+    Restart,
     /// Check daemon status.
     Status,
     /// Enable suggestions across all shells.
@@ -78,24 +80,31 @@ enum Commands {
     Off,
     /// Run diagnostic health checks.
     Doctor,
+    /// Show the daemon log (last 50 lines).
+    Logs,
     /// Import new entries from ~/.zsh_history into the suggestion database.
     Import,
     /// Show history statistics: top commands and accepted suggestions.
     Stats,
 }
 
-/// Resolves the aliast data directory (~/Library/Application Support/aliast on
-/// macOS, ~/.local/share/aliast as fallback).
-fn data_dir() -> PathBuf {
+/// Resolves an application data directory (~/Library/Application Support/<name>
+/// on macOS, ~/.local/share/<name> as fallback).
+fn app_data_dir(app_name: &str) -> PathBuf {
     directories::BaseDirs::new()
-        .map(|dirs| dirs.data_local_dir().join("aliast"))
+        .map(|dirs| dirs.data_local_dir().join(app_name))
         .unwrap_or_else(|| {
             let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
             PathBuf::from(home)
                 .join(".local")
                 .join("share")
-                .join("aliast")
+                .join(app_name)
         })
+}
+
+/// The aliast data directory (history db, daemon log).
+fn data_dir() -> PathBuf {
+    app_data_dir("aliast")
 }
 
 /// Initializes tracing with file-based logging.
@@ -122,16 +131,50 @@ fn send_ipc_request(socket_path: &Path, request_json: &str) -> Result<String> {
     Ok(response_line)
 }
 
-fn init_tracing() -> Result<()> {
-    let log_dir = directories::BaseDirs::new()
-        .map(|dirs| dirs.data_local_dir().join("aliast"))
-        .unwrap_or_else(|| {
-            let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-            PathBuf::from(home)
-                .join(".local")
-                .join("share")
-                .join("aliast")
+/// Re-exec ourselves detached (new session, null stdio) with `--foreground`,
+/// wait (bounded) until the child is serving, and return -- so the launcher
+/// does not capture the user's terminal. Exits the process non-zero if the
+/// daemon fails to come up.
+fn daemonize(socket_path: &Path) -> Result<()> {
+    let exe = std::env::current_exe()?;
+    let mut command = std::process::Command::new(exe);
+    command
+        .arg("start")
+        .arg("--foreground")
+        .arg("--socket")
+        .arg(socket_path)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    #[cfg(unix)]
+    unsafe {
+        use std::os::unix::process::CommandExt;
+        command.pre_exec(|| {
+            // Detach from the controlling terminal so closing it
+            // does not SIGHUP the daemon.
+            if libc::setsid() == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
         });
+    }
+    command.spawn()?;
+
+    // Wait (bounded) for the child to bind before reporting success.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while std::time::Instant::now() < deadline {
+        if std::os::unix::net::UnixStream::connect(socket_path).is_ok() {
+            println!("aliast: daemon started");
+            return Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+    eprintln!("aliast: daemon did not start within 5s (check the log)");
+    std::process::exit(1);
+}
+
+fn init_tracing() -> Result<()> {
+    let log_dir = data_dir();
 
     std::fs::create_dir_all(&log_dir)?;
     let log_path = log_dir.join("daemon.log");
@@ -162,25 +205,7 @@ async fn main() -> Result<()> {
     }
 
     // Migrate data files from old alias/ to new aliast/ directory (best-effort, silent)
-    let old_data_dir = directories::BaseDirs::new()
-        .map(|dirs| dirs.data_local_dir().join("alias"))
-        .unwrap_or_else(|| {
-            let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-            PathBuf::from(home)
-                .join(".local")
-                .join("share")
-                .join("alias")
-        });
-    let new_data_dir = directories::BaseDirs::new()
-        .map(|dirs| dirs.data_local_dir().join("aliast"))
-        .unwrap_or_else(|| {
-            let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-            PathBuf::from(home)
-                .join(".local")
-                .join("share")
-                .join("aliast")
-        });
-    let _ = migration::migrate_data_files(&old_data_dir, &new_data_dir);
+    let _ = migration::migrate_data_files(&app_data_dir("alias"), &data_dir());
 
     init_tracing()?;
 
@@ -193,50 +218,14 @@ async fn main() -> Result<()> {
             // An explicit start always re-enables plugin auto-start.
             lifecycle::enable_autostart(&socket_path);
 
-            // Default: daemonize. Re-exec ourselves detached (new session, null
-            // stdio) with --foreground, wait until the child is serving, and
-            // exit -- so `aliast start` does not capture the user's terminal.
+            // Default: daemonize, so `aliast start` does not capture the
+            // user's terminal.
             if !foreground {
                 if std::os::unix::net::UnixStream::connect(&socket_path).is_ok() {
                     eprintln!("aliast: daemon is already running");
                     std::process::exit(1);
                 }
-
-                let exe = std::env::current_exe()?;
-                let mut command = std::process::Command::new(exe);
-                command
-                    .arg("start")
-                    .arg("--foreground")
-                    .arg("--socket")
-                    .arg(&socket_path)
-                    .stdin(std::process::Stdio::null())
-                    .stdout(std::process::Stdio::null())
-                    .stderr(std::process::Stdio::null());
-                #[cfg(unix)]
-                unsafe {
-                    use std::os::unix::process::CommandExt;
-                    command.pre_exec(|| {
-                        // Detach from the controlling terminal so closing it
-                        // does not SIGHUP the daemon.
-                        if libc::setsid() == -1 {
-                            return Err(std::io::Error::last_os_error());
-                        }
-                        Ok(())
-                    });
-                }
-                command.spawn()?;
-
-                // Wait (bounded) for the child to bind before reporting success.
-                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-                while std::time::Instant::now() < deadline {
-                    if std::os::unix::net::UnixStream::connect(&socket_path).is_ok() {
-                        println!("aliast: daemon started");
-                        return Ok(());
-                    }
-                    std::thread::sleep(std::time::Duration::from_millis(25));
-                }
-                eprintln!("aliast: daemon did not start within 5s (check the log)");
-                std::process::exit(1);
+                return daemonize(&socket_path);
             }
 
             tracing::info!(?socket_path, "starting daemon");
@@ -407,6 +396,29 @@ async fn main() -> Result<()> {
                 }
             }
         }
+        Commands::Restart => {
+            // Keep plugin auto-start paused during the gap (mirrors `stop`) so
+            // no shell respawns the old-env daemon between shutdown and the
+            // new bind. Re-enabled below once the new daemon is serving.
+            if let Err(err) = lifecycle::disable_autostart(&socket_path) {
+                tracing::warn!("could not write autostart marker: {err}");
+            }
+            // Stop any running daemon; one that is not running is fine.
+            if send_ipc_request(&socket_path, r#"{"id":"restart-1","type":"shutdown"}"#).is_ok() {
+                // Wait for the old daemon to release the socket so the new
+                // bind cannot race it.
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+                while socket_path.exists() && std::time::Instant::now() < deadline {
+                    std::thread::sleep(std::time::Duration::from_millis(25));
+                }
+                if socket_path.exists() {
+                    eprintln!("aliast: old daemon did not shut down within 5s");
+                    std::process::exit(1);
+                }
+            }
+            daemonize(&socket_path)?;
+            lifecycle::enable_autostart(&socket_path);
+        }
         Commands::Status => {
             match send_ipc_request(&socket_path, r#"{"id":"status-1","type":"get_status"}"#) {
                 Ok(response) => {
@@ -472,6 +484,28 @@ async fn main() -> Result<()> {
             let has_failures = checks.iter().any(|c| !c.passed);
             if has_failures {
                 std::process::exit(1);
+            }
+        }
+        Commands::Logs => {
+            let log_path = data_dir().join("daemon.log");
+            // Tracing setup creates an empty daemon.log on every invocation,
+            // so missing and empty are the same user-visible state.
+            let bytes = std::fs::read(&log_path).unwrap_or_default();
+            let content = String::from_utf8_lossy(&bytes);
+            let all_lines: Vec<&str> = content.lines().collect();
+            if all_lines.is_empty() {
+                println!("aliast: no log entries yet at {}", log_path.display());
+                return Ok(());
+            }
+            let start_index = all_lines.len().saturating_sub(50);
+            println!(
+                "{} (last {} of {} lines)",
+                log_path.display(),
+                all_lines.len() - start_index,
+                all_lines.len()
+            );
+            for line in &all_lines[start_index..] {
+                println!("{line}");
             }
         }
         Commands::Import => {

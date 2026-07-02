@@ -55,7 +55,7 @@ export ALIAST_OPENAI_KEY=sk-...
 
 Run `aliast doctor` to verify your setup.
 
-> **Note:** The daemon reads these variables once at startup. After changing any `ALIAST_NL_*` variable, run `aliast stop && aliast start` (or open a new terminal) for it to take effect.
+> **Note:** The daemon reads these variables once at startup. After changing any `ALIAST_NL_*` variable, run `aliast restart` for it to take effect.
 
 ## Usage
 
@@ -76,10 +76,12 @@ Some terminals do not emit Ctrl+Space. If the toggle does nothing, rebind it wit
 ```
 aliast start     Start the daemon (also re-enables auto-start)
 aliast stop      Stop the daemon and pause auto-start until `aliast start`
+aliast restart   Restart the daemon (picks up changed ALIAST_* env vars)
 aliast status    Show daemon state, socket, and AI backend
 aliast on        Enable suggestions (all shells)
 aliast off       Disable suggestions (all shells)
 aliast doctor    Run diagnostic health checks
+aliast logs      Show the daemon log (last 50 lines)
 aliast import    Import new entries from ~/.zsh_history (dedup-safe)
 aliast stats     Show top commands and most-accepted suggestions
 ```

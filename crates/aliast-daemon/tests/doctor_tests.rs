@@ -129,7 +129,11 @@ fn env_matches_daemon_fails_on_backend_mismatch() {
         check.detail
     );
     assert!(
-        check.fix.as_deref().unwrap_or("").contains("aliast stop"),
+        check
+            .fix
+            .as_deref()
+            .unwrap_or("")
+            .contains("aliast restart"),
         "fix should say to restart the daemon"
     );
 }
