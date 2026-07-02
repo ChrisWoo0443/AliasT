@@ -70,13 +70,15 @@ Press **Ctrl+Space** to toggle NL mode. A blue dot appears before your cursor. T
 ### Commands
 
 ```
-aliast start     Start the daemon
-aliast stop      Stop the daemon
+aliast start     Start the daemon (also re-enables auto-start)
+aliast stop      Stop the daemon and pause auto-start until `aliast start`
 aliast status    Show daemon state, socket, and AI backend
 aliast on        Enable suggestions (all shells)
 aliast off       Disable suggestions (all shells)
 aliast doctor    Run diagnostic health checks
 ```
+
+The plugin normally starts the daemon on demand, so `aliast stop` also pauses that auto-start -- otherwise the next keystroke would just respawn it. To pause suggestions but keep the daemon running, use `aliast off`.
 
 ## How It Works
 

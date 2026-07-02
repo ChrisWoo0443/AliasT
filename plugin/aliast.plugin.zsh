@@ -119,6 +119,11 @@ _aliast_connect() {
   # Daemon not running -- check if aliast binary is on PATH (avoids 500ms delay when missing)
   (( $+commands[aliast] )) || return 1
 
+  # Respect an explicit `aliast stop`: while the marker exists, do not
+  # auto-respawn (the precmd hook would otherwise resurrect the daemon before
+  # the next prompt renders). `aliast start` clears the marker.
+  [[ -e "${_ALIAST_SOCKET_PATH:h}/autostart-disabled" ]] && return 1
+
   # Spawn daemon (fire-and-forget)
   command aliast start &>/dev/null &!
 

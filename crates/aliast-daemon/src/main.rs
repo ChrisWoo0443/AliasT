@@ -168,6 +168,8 @@ async fn main() -> Result<()> {
 
     match cli.command {
         Commands::Start => {
+            // An explicit start always re-enables plugin auto-start.
+            lifecycle::enable_autostart(&socket_path);
             tracing::info!(?socket_path, "starting daemon");
 
             // Initialize HistoryStore at ~/.local/share/aliast/history.db
@@ -322,10 +324,17 @@ async fn main() -> Result<()> {
             tracing::info!("Daemon stopped cleanly");
         }
         Commands::Stop => {
+            // Record the explicit stop BEFORE shutting down, so no shell's
+            // precmd/keystroke hook can respawn the daemon in the gap. Without
+            // this, the plugin resurrects the daemon before the next prompt and
+            // `aliast stop` is effectively a no-op in plugin-enabled shells.
+            if let Err(err) = lifecycle::disable_autostart(&socket_path) {
+                tracing::warn!("could not write autostart marker: {err}");
+            }
             match send_ipc_request(&socket_path, r#"{"id":"stop-1","type":"shutdown"}"#) {
                 Ok(response) => {
                     if response.contains("\"shutting_down\"") {
-                        println!("aliast: daemon stopped");
+                        println!("aliast: daemon stopped (auto-start paused until `aliast start`)");
                     } else {
                         eprintln!("aliast: unexpected response from daemon");
                         std::process::exit(1);
