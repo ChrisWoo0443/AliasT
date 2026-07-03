@@ -95,3 +95,21 @@ fn quotes_and_separators_yield_nothing() {
 fn unknown_subcommand_flag_yields_nothing() {
     assert!(complete("git frobnicate --am", 8).is_empty());
 }
+
+#[test]
+fn grammar_pack_covers_the_common_tools() {
+    // One spot check per tool added in this task.
+    assert_eq!(complete("docker ru", 8), vec!["docker run"]);
+    assert_eq!(complete("brew inst", 8), vec!["brew install"]);
+    assert_eq!(complete("npm inst", 8), vec!["npm install"]);
+    assert_eq!(complete("pnpm ad", 8), vec!["pnpm add"]);
+    assert_eq!(complete("yarn ad", 8), vec!["yarn add"]);
+    assert_eq!(complete("kubectl app", 8), vec!["kubectl apply"]);
+    assert_eq!(complete("gh p", 8), vec!["gh pr"]);
+    assert_eq!(complete("go bu", 8), vec!["go build"]);
+    assert_eq!(complete("rustup upd", 8), vec!["rustup update"]);
+    assert_eq!(complete("pip inst", 8), vec!["pip install"]);
+    assert_eq!(complete("uv sy", 8), vec!["uv sync"]);
+    assert_eq!(complete("terraform pl", 8), vec!["terraform plan"]);
+    assert_eq!(complete("tmux new-s", 8), vec!["tmux new-session"]);
+}
