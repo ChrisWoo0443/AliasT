@@ -3,3 +3,4 @@
 
 pub mod grammar;
 mod grammars_data;
+pub mod paths;
