@@ -107,3 +107,45 @@ fn exact_dir_name_still_gets_trailing_slash() {
     let got = complete("cd src", Some(tmp.path().to_str().unwrap()), &[], 8);
     assert_eq!(got, vec!["cd src/"]);
 }
+
+#[test]
+fn history_targets_outrank_alphabetical_order() {
+    let tmp = fixture(&["alpha", "beta", "zeta"], &[]);
+    let cwd = tmp.path().to_str().unwrap();
+
+    // The user cds into zeta most, then beta, from this directory.
+    let cd_history = vec!["cd zeta".to_string(), "cd beta".to_string()];
+
+    let got = complete("cd ", Some(cwd), &cd_history, 8);
+    assert_eq!(got, vec!["cd zeta/", "cd beta/", "cd alpha/"]);
+}
+
+#[test]
+fn history_ranking_matches_nested_typed_paths() {
+    let tmp = fixture(&["crates/aaa", "crates/zzz"], &[]);
+    let cwd = tmp.path().to_str().unwrap();
+
+    let cd_history = vec!["cd crates/zzz".to_string()];
+    let got = complete("cd crates/", Some(cwd), &cd_history, 8);
+    assert_eq!(got, vec!["cd crates/zzz/", "cd crates/aaa/"]);
+}
+
+#[test]
+fn history_target_trailing_slash_still_matches() {
+    let tmp = fixture(&["alpha", "beta"], &[]);
+    let cwd = tmp.path().to_str().unwrap();
+
+    let cd_history = vec!["cd beta/".to_string()];
+    let got = complete("cd ", Some(cwd), &cd_history, 8);
+    assert_eq!(got, vec!["cd beta/", "cd alpha/"]);
+}
+
+#[test]
+fn irrelevant_history_leaves_alphabetical_order() {
+    let tmp = fixture(&["alpha", "beta"], &[]);
+    let cwd = tmp.path().to_str().unwrap();
+
+    let cd_history = vec!["cd somewhere/else".to_string()];
+    let got = complete("cd ", Some(cwd), &cd_history, 8);
+    assert_eq!(got, vec!["cd alpha/", "cd beta/"]);
+}

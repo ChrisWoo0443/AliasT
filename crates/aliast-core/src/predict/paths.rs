@@ -35,15 +35,14 @@ pub fn is_eligible(buffer: &str) -> bool {
 
 /// Complete the trailing token of `buffer` as a directory. Returns at most
 /// `limit` full command strings extending `buffer`, each ending in '/'.
-/// `cd_history` is reserved for ranking (Task 6); pass `&[]` for pure
-/// filesystem completion.
+/// `cd_history` ranks matching targets first (see `history_rank` below);
+/// pass `&[]` for pure alphabetical filesystem completion.
 pub fn complete(
     buffer: &str,
     cwd: Option<&str>,
     cd_history: &[String],
     limit: usize,
 ) -> Vec<String> {
-    let _ = cd_history; // ranking blend lands in the next task
     if !is_eligible(buffer) {
         return Vec::new();
     }
@@ -120,9 +119,39 @@ pub fn complete(
     }
     names.sort();
 
+    // Blend in navigation history: a candidate whose typed relative path
+    // matches a `cd` target the user actually ran from this cwd sorts first,
+    // in cd_history order (which is frequency order, per the store query).
+    let history_targets: Vec<&str> = cd_history
+        .iter()
+        .filter_map(|cmd| extract_cd_target(cmd))
+        .collect();
+    let history_rank = |name: &str| -> usize {
+        let typed = if typed_parent.is_empty() {
+            name.to_string()
+        } else {
+            format!("{typed_parent}/{name}")
+        };
+        history_targets
+            .iter()
+            .position(|target| *target == typed)
+            .unwrap_or(usize::MAX)
+    };
+    names.sort_by_key(|name| history_rank(name)); // stable: ties stay alphabetical
+
     names
         .into_iter()
         .take(limit)
         .map(|name| format!("{}{}/", buffer, &name[prefix.len()..]))
         .collect()
+}
+
+/// Extract the target of a simple `cd <target>` command; quoted, escaped, or
+/// option-bearing forms return None (they cannot match a plain dir name).
+fn extract_cd_target(cmd: &str) -> Option<&str> {
+    let target = cmd.strip_prefix("cd ")?.trim();
+    if target.is_empty() || target.contains(['"', '\'', '`', '\\']) || target.starts_with('-') {
+        return None;
+    }
+    Some(target.trim_end_matches('/'))
 }
