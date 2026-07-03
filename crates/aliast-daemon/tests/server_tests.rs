@@ -239,6 +239,48 @@ async fn bind_creates_an_owner_only_socket() {
 }
 
 #[tokio::test]
+async fn complete_request_uses_grammar_and_directory_sources() {
+    let (socket_path, cancel_token, _temp_dir) = start_test_server().await;
+
+    let result = timeout(Duration::from_secs(5), async {
+        let mut stream = UnixStream::connect(&socket_path).await.unwrap();
+
+        // Empty store: the bundled grammar pack must still complete `git sw`
+        // to `switch` with no history recorded.
+        let grammar_response = send_and_receive(
+            &mut stream,
+            r#"{"id":"g1","type":"complete","buf":"git sw","cur":6}"#,
+        )
+        .await;
+        let parsed_grammar: serde_json::Value = serde_json::from_str(&grammar_response).unwrap();
+        assert_eq!(parsed_grammar["type"], "suggestion");
+        assert_eq!(parsed_grammar["id"], "g1");
+        assert_eq!(parsed_grammar["text"], "itch");
+
+        // Directory source: a tempdir with a real "projects" subdirectory
+        // as cwd must complete `cd pro` to the subdirectory name.
+        let cwd_dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(cwd_dir.path().join("projects")).unwrap();
+        let request = serde_json::json!({
+            "id": "d1",
+            "type": "complete",
+            "buf": "cd pro",
+            "cur": 6,
+            "cwd": cwd_dir.path().to_str().unwrap(),
+        });
+        let dir_response = send_and_receive(&mut stream, &request.to_string()).await;
+        let parsed_dir: serde_json::Value = serde_json::from_str(&dir_response).unwrap();
+        assert_eq!(parsed_dir["type"], "suggestion");
+        assert_eq!(parsed_dir["id"], "d1");
+        assert_eq!(parsed_dir["text"], "jects/");
+    })
+    .await;
+
+    cancel_token.cancel();
+    assert!(result.is_ok(), "test timed out");
+}
+
+#[tokio::test]
 async fn bind_fails_when_another_daemon_is_already_listening() {
     let temp_dir = tempfile::tempdir().unwrap();
     let socket_path = temp_dir.path().join("busy.sock");

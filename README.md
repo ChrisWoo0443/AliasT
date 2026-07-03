@@ -63,6 +63,13 @@ Run `aliast doctor` to verify your setup.
 
 Start typing a command. Suggestions appear as dimmed text after your cursor. Press **Tab** to accept the whole suggestion, or **Shift+Tab** to accept just the next word. When the top match isn't the one you want, **Ctrl+N** / **Ctrl+P** cycle through the other candidates (with no suggestion showing, they do normal history navigation).
 
+Suggestions come from three sources, in priority order: your own history
+(frecency-ranked), a bundled grammar pack for common CLI tools (so `git sw`
+completes to `switch` even if you've never typed it -- git, docker, cargo,
+brew, npm, kubectl, gh, and more), and real directory completion for
+`cd`/`ls`/`pushd`/`mkdir` (subdirectories of where you are, ranked by where
+you actually go).
+
 ### Natural Language Mode
 
 Press **Ctrl+Space** to toggle NL mode. A blue dot appears before your cursor. Type what you want in plain English, press **Enter**, and AliasT generates the shell command. Press **Escape** to exit NL mode.
@@ -92,7 +99,9 @@ The plugin normally starts the daemon on demand, so `aliast stop` also pauses th
 
 A Rust daemon runs in the background, serving suggestions over a Unix socket. The zsh plugin connects to the daemon on first keystroke, renders ghost text via `POSTDISPLAY`, and handles the NL mode UI.
 
-Suggestions are ranked by frecency -- frequency, recency, directory, and exit code all factor in. History stays local. Cloud API calls only happen in NL mode when you explicitly trigger them -- and only your prompt plus a small context block (current directory, git branch, and last exit code) is sent. Set `ALIAST_NL_NO_CONTEXT=1` to send only the prompt.
+Suggestions are ranked by frecency -- frequency, recency, directory, and exit
+code all factor in. When history has no answer, AliasT falls back to a bundled
+CLI grammar pack and to real subdirectories of your current directory. History stays local. Cloud API calls only happen in NL mode when you explicitly trigger them -- and only your prompt plus a small context block (current directory, git branch, and last exit code) is sent. Set `ALIAST_NL_NO_CONTEXT=1` to send only the prompt.
 
 ## Environment Variables
 
