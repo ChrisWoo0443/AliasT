@@ -14,6 +14,16 @@ const ALLOWLIST: &[&str] = &["cd", "ls", "pushd", "mkdir", "rmdir"];
 /// entries rather than blowing the ghost-text budget.
 const SCAN_CAP: usize = 2048;
 
+/// Suggested text is executed as-is when accepted: a name containing
+/// whitespace would break the command into extra words, and a name planted
+/// with one of these shell-significant characters (trivially done via
+/// `git clone`/`unzip`/etc.) would turn innocent ghost text into a compound
+/// command. Filtering candidates out -- not escaping them -- matches this
+/// module's conservative-guard philosophy; escaping is a possible v2.
+const UNSAFE_NAME_CHARS: &[char] = &[
+    '"', '\'', '`', '\\', ';', '|', '&', '$', '(', ')', '<', '>', '*', '?', '#', '!',
+];
+
 /// Cheap pre-check so callers can skip the cd-history SQL query entirely
 /// for buffers that can never produce a directory completion.
 pub fn is_eligible(buffer: &str) -> bool {
@@ -113,6 +123,11 @@ pub fn complete(
             continue;
         }
         if !prefix.starts_with('.') && name.starts_with('.') {
+            continue;
+        }
+        if name.chars().any(|c| c.is_whitespace() || c.is_control())
+            || name.contains(UNSAFE_NAME_CHARS)
+        {
             continue;
         }
         names.push(name);

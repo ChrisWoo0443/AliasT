@@ -149,3 +149,17 @@ fn irrelevant_history_leaves_alphabetical_order() {
     let got = complete("cd ", Some(cwd), &cd_history, 8);
     assert_eq!(got, vec!["cd alpha/", "cd beta/"]);
 }
+
+#[test]
+fn names_with_whitespace_are_not_suggested() {
+    let tmp = fixture(&["Application Support", "Applications"], &[]);
+    let got = complete("cd Appl", Some(tmp.path().to_str().unwrap()), &[], 8);
+    assert_eq!(got, vec!["cd Applications/"]);
+}
+
+#[test]
+fn names_with_shell_metacharacters_are_not_suggested() {
+    let tmp = fixture(&["evil; rm -rf x", "evil$(x)", "evilsafe"], &[]);
+    let got = complete("cd evil", Some(tmp.path().to_str().unwrap()), &[], 8);
+    assert_eq!(got, vec!["cd evilsafe/"]);
+}
