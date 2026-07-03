@@ -18,10 +18,13 @@ const SCAN_CAP: usize = 2048;
 /// whitespace would break the command into extra words, and a name planted
 /// with one of these shell-significant characters (trivially done via
 /// `git clone`/`unzip`/etc.) would turn innocent ghost text into a compound
-/// command. Filtering candidates out -- not escaping them -- matches this
-/// module's conservative-guard philosophy; escaping is a possible v2.
+/// command. Braces/brackets/equals trigger zsh brace, glob, and =cmd
+/// expansion -- no execution vector, but still a broken command. Filtering
+/// candidates out -- not escaping them -- matches this module's
+/// conservative-guard philosophy; escaping is a possible v2.
 const UNSAFE_NAME_CHARS: &[char] = &[
-    '"', '\'', '`', '\\', ';', '|', '&', '$', '(', ')', '<', '>', '*', '?', '#', '!',
+    '"', '\'', '`', '\\', ';', '|', '&', '$', '(', ')', '<', '>', '*', '?', '#', '!', '{', '}',
+    '[', ']', '=',
 ];
 
 /// Cheap pre-check so callers can skip the cd-history SQL query entirely

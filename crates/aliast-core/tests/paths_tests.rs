@@ -165,3 +165,12 @@ fn names_with_shell_metacharacters_are_not_suggested() {
     let got = complete("cd evil", Some(tmp.path().to_str().unwrap()), &[], 8);
     assert_eq!(got, vec!["cd evilsafe/"]);
 }
+
+#[test]
+fn names_triggering_zsh_expansion_are_not_suggested() {
+    // Brace, glob, and =cmd expansion break the accepted command even though
+    // they cannot execute anything.
+    let tmp = fixture(&["x{a,b}", "y[1]", "=weird", "plain"], &[]);
+    let got = complete("cd ", Some(tmp.path().to_str().unwrap()), &[], 8);
+    assert_eq!(got, vec!["cd plain/"]);
+}
