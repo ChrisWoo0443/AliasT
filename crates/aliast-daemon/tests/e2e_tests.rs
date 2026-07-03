@@ -214,14 +214,17 @@ async fn test_complete_empty_db_returns_empty() {
         let mut stream = UnixStream::connect(&socket_path).await.unwrap();
         let response = send_ndjson(
             &mut stream,
-            r#"{"id":"r1","type":"complete","buf":"git ch","cur":6}"#,
+            r#"{"id":"r1","type":"complete","buf":"unknown_xyz","cur":11}"#,
         )
         .await;
 
         match response {
             Response::Suggestion { id, text } => {
                 assert_eq!(id, "r1");
-                assert_eq!(text, "", "empty DB should return empty suggestion");
+                assert_eq!(
+                    text, "",
+                    "a buffer with no history, grammar, or path match should return empty"
+                );
             }
             other => panic!("expected Suggestion, got {:?}", other),
         }
