@@ -142,7 +142,7 @@ pub(crate) static GRAMMARS: &[ToolGrammar] = &[
             sub!("publish", &["--dry-run", "--access"]),
             sub!("ci", &[]),
             sub!("link", &[]),
-            sub!("version", &["patch", "minor", "major"]),
+            sub!("version", &[]),
         ],
     },
     ToolGrammar {
@@ -241,7 +241,7 @@ pub(crate) static GRAMMARS: &[ToolGrammar] = &[
         subcommands: &[
             sub!("update", &["--force"]),
             sub!("default", &[]),
-            sub!("show", &["active-toolchain"]),
+            sub!("show", &[]),
             sub!("target", &[]),
             sub!("component", &[]),
             sub!("toolchain", &[]),

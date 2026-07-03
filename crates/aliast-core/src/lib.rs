@@ -59,7 +59,11 @@ pub fn suggest_at(
     // 2. History: personalized full commands, frecency-ranked. When the
     //    top-ranked command is exactly the buffer, the user has fully typed
     //    the winner -- suggest no history continuation rather than surfacing
-    //    a lower-ranked extension (pre-pipeline behavior, kept deliberately).
+    //    a lower-ranked extension. This matches pre-pipeline behavior exactly
+    //    at skip=0. At skip>=1 the old code could still surface a
+    //    lower-ranked extension here, whereas this returns None instead; that
+    //    difference is deliberate and unreachable in practice, since with no
+    //    ghost text at skip=0 the plugin never requests skip>=1.
     let history = store
         .suggest_ranked_list(buffer, context, 8)
         .unwrap_or_default();

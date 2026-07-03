@@ -39,14 +39,22 @@ pub fn is_eligible(buffer: &str) -> bool {
         return false;
     }
     // A space after the command is required; completing the command word
-    // itself is history's job.
-    trailing_space || tokens.next().is_some()
+    // itself is history's job. And a partial token that starts with '-' is
+    // a flag, not a path -- reject here so callers skip the cd-history SQL
+    // query entirely instead of running it only for `complete` to bail on
+    // the same check.
+    match tokens.last() {
+        Some(last) if !trailing_space => !last.starts_with('-'),
+        Some(_) => true,
+        None => trailing_space,
+    }
 }
 
 /// Complete the trailing token of `buffer` as a directory. Returns at most
 /// `limit` full command strings extending `buffer`, each ending in '/'.
-/// `cd_history` ranks matching targets first (see `history_rank` below);
-/// pass `&[]` for pure alphabetical filesystem completion.
+/// Candidates matching a cd-history target sort first, in frequency order;
+/// ties stay alphabetical. Pass `&[]` for pure alphabetical filesystem
+/// completion.
 pub fn complete(
     buffer: &str,
     cwd: Option<&str>,
@@ -63,10 +71,8 @@ pub fn complete(
     } else {
         buffer.split_whitespace().last().unwrap_or("")
     };
-    // Flags are not paths.
-    if partial.starts_with('-') {
-        return Vec::new();
-    }
+    // (Flag partials are rejected by is_eligible above, before the
+    // cd-history SQL query even runs; no need to re-check here.)
 
     // Split the partial into the parent to scan and the name prefix to match:
     // "crates/al" -> scan "crates", match "al"; "al" -> scan ".", match "al".
@@ -152,7 +158,7 @@ pub fn complete(
             .position(|target| *target == typed)
             .unwrap_or(usize::MAX)
     };
-    names.sort_by_key(|name| history_rank(name)); // stable: ties stay alphabetical
+    names.sort_by_cached_key(|name| history_rank(name)); // stable: ties stay alphabetical
 
     names
         .into_iter()

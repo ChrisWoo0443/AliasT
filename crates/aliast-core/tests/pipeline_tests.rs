@@ -86,6 +86,11 @@ fn navigation_history_ranks_directory_candidates() {
         suggest_at(&store, "cd ", &context, 1),
         Some("alpha/".to_string())
     );
+    assert_eq!(
+        suggest_at(&store, "cd ", &context, 2),
+        None,
+        "history's bare `cd zeta` must dedupe against the path candidate, not occupy a cycling slot"
+    );
 }
 
 #[test]

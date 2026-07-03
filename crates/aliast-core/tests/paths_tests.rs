@@ -24,6 +24,8 @@ fn eligibility_requires_allowlisted_command_and_space() {
     assert!(!is_eligible("cat x")); // not allowlisted
     assert!(!is_eligible("cd x && ls")); // separators
     assert!(!is_eligible("cd \"My")); // quotes
+    assert!(!is_eligible("ls -l")); // flag partial: no path completion, no SQL query
+    assert!(is_eligible("ls -l ")); // trailing space after a flag: next arg may be a path
 }
 
 #[test]

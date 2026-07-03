@@ -89,6 +89,8 @@ fn quotes_and_separators_yield_nothing() {
     assert!(complete("git s | grep x", 8).is_empty());
     assert!(complete("echo a; git s", 8).is_empty());
     assert!(complete("git commit -m 'w", 8).is_empty());
+    assert!(complete("git s`whoami`", 8).is_empty());
+    assert!(complete("git commit -m fix\\", 8).is_empty());
 }
 
 #[test]
