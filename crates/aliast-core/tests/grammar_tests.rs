@@ -48,3 +48,50 @@ fn mid_argument_yields_nothing() {
     // tool + subcommand + non-flag argument: grammar never guesses arguments.
     assert!(complete("git checkout ma", 8).is_empty());
 }
+
+#[test]
+fn completes_flag_for_known_subcommand() {
+    assert_eq!(complete("git commit --am", 8), vec!["git commit --amend"]);
+}
+
+#[test]
+fn flag_candidates_include_globals_after_subcommand_flags() {
+    // cargo build: subcommand flags first (table order), then global flags.
+    let got = complete("cargo build --", 16);
+    assert_eq!(
+        got,
+        vec![
+            "cargo build --release",
+            "cargo build --workspace",
+            "cargo build --all-targets",
+            "cargo build --help",
+            "cargo build --version",
+            "cargo build --locked",
+            "cargo build --offline",
+        ]
+    );
+}
+
+#[test]
+fn flag_directly_after_tool_completes_global_flags() {
+    assert_eq!(complete("git --ver", 8), vec!["git --version"]);
+}
+
+#[test]
+fn sudo_prefix_is_stripped_for_matching() {
+    assert_eq!(complete("sudo git sw", 8), vec!["sudo git switch"]);
+}
+
+#[test]
+fn quotes_and_separators_yield_nothing() {
+    assert!(complete("git commit -m \"fix", 8).is_empty());
+    assert!(complete("cd x && git sw", 8).is_empty());
+    assert!(complete("git s | grep x", 8).is_empty());
+    assert!(complete("echo a; git s", 8).is_empty());
+    assert!(complete("git commit -m 'w", 8).is_empty());
+}
+
+#[test]
+fn unknown_subcommand_flag_yields_nothing() {
+    assert!(complete("git frobnicate --am", 8).is_empty());
+}

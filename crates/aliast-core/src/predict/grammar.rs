@@ -23,8 +23,17 @@ pub struct Subcommand {
 /// Complete `buffer` against the grammar pack. Returns at most `limit` full
 /// command strings, each starting with `buffer`, in table (rank) order.
 pub fn complete(buffer: &str, limit: usize) -> Vec<String> {
+    // Conservative guards: quoting, escaping, and command separators put the
+    // buffer outside this simple token model -- suggest nothing.
+    if buffer.contains(['"', '\'', '`', '\\', ';', '|', '&']) {
+        return Vec::new();
+    }
+
     let trailing_space = buffer.ends_with(char::is_whitespace);
-    let tokens: Vec<&str> = buffer.split_whitespace().collect();
+    // Match against the command after a leading `sudo `, but return full
+    // strings extending the original buffer.
+    let stripped = buffer.strip_prefix("sudo ").unwrap_or(buffer);
+    let tokens: Vec<&str> = stripped.split_whitespace().collect();
 
     let Some(&tool_name) = tokens.first() else {
         return Vec::new();
@@ -32,8 +41,6 @@ pub fn complete(buffer: &str, limit: usize) -> Vec<String> {
     let Some(tool) = GRAMMARS.iter().find(|g| g.name == tool_name) else {
         return Vec::new();
     };
-    // A space after the tool is required: completing the tool name itself is
-    // history's job.
     if tokens.len() == 1 && !trailing_space {
         return Vec::new();
     }
@@ -49,8 +56,40 @@ pub fn complete(buffer: &str, limit: usize) -> Vec<String> {
         &tokens[..tokens.len() - 1]
     };
 
-    // tool + partial subcommand (nothing else typed yet)
-    if complete_tokens == [tool_name] && !partial.starts_with('-') {
+    // Flag completion: current token starts with '-'. Candidates are the
+    // known subcommand's flags (if one was typed) then global flags.
+    if partial.starts_with('-') {
+        let subcommand = complete_tokens
+            .iter()
+            .skip(1)
+            .find(|token| !token.starts_with('-'))
+            .and_then(|name| tool.subcommands.iter().find(|sub| sub.name == *name));
+        if complete_tokens.len() > 1 && subcommand.is_none() {
+            // An argument we don't recognize precedes the flag: stay silent
+            // rather than suggest flags for the wrong context.
+            return Vec::new();
+        }
+        let subcommand_flags = subcommand.map(|sub| sub.flags).unwrap_or(&[]);
+        let mut seen = Vec::new();
+        return subcommand_flags
+            .iter()
+            .chain(tool.global_flags.iter())
+            .filter(|flag| flag.starts_with(partial) && **flag != partial)
+            .filter(|flag| {
+                if seen.contains(flag) {
+                    false
+                } else {
+                    seen.push(*flag);
+                    true
+                }
+            })
+            .take(limit)
+            .map(|flag| format!("{}{}", buffer, &flag[partial.len()..]))
+            .collect();
+    }
+
+    // Subcommand completion: only the tool typed so far.
+    if complete_tokens == [tool_name] {
         return tool
             .subcommands
             .iter()
