@@ -488,3 +488,74 @@ fn top_commands_orders_by_usage() {
     let capped = store.top_commands(1).unwrap();
     assert_eq!(capped.len(), 1);
 }
+
+#[test]
+fn suggest_ranked_list_returns_ordered_candidates() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = HistoryStore::open(&tmp.path().join("t.db")).unwrap();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+
+    for i in 0..10 {
+        store
+            .record_command("git push", now - 50 + i, "/p", Some(0))
+            .unwrap();
+    }
+    for i in 0..3 {
+        store
+            .record_command("git pull", now - 50 + i, "/p", Some(0))
+            .unwrap();
+    }
+    store
+        .record_command("git pack-refs", now - 50, "/p", Some(0))
+        .unwrap();
+
+    let context = SuggestionContext::default();
+    let list = store.suggest_ranked_list("git p", &context, 8).unwrap();
+    assert_eq!(list, vec!["git push", "git pull", "git pack-refs"]);
+
+    let limited = store.suggest_ranked_list("git p", &context, 2).unwrap();
+    assert_eq!(limited, vec!["git push", "git pull"]);
+}
+
+#[test]
+fn suggest_ranked_list_empty_prefix_is_empty() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = HistoryStore::open(&tmp.path().join("t.db")).unwrap();
+    assert!(
+        store
+            .suggest_ranked_list("", &SuggestionContext::default(), 8)
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
+fn cd_commands_for_cwd_ranks_by_frequency_within_directory() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = HistoryStore::open(&tmp.path().join("t.db")).unwrap();
+
+    for t in 0..5 {
+        store
+            .record_command("cd crates", 1000 + t, "/repo", Some(0))
+            .unwrap();
+    }
+    store
+        .record_command("cd plugin", 2000, "/repo", Some(0))
+        .unwrap();
+    // Same command from a DIFFERENT directory must not count.
+    for t in 0..9 {
+        store
+            .record_command("cd elsewhere", 3000 + t, "/other", Some(0))
+            .unwrap();
+    }
+    // Non-cd commands in /repo must not appear.
+    store
+        .record_command("ls -la", 4000, "/repo", Some(0))
+        .unwrap();
+
+    let got = store.cd_commands_for_cwd("/repo", 32).unwrap();
+    assert_eq!(got, vec!["cd crates", "cd plugin"]);
+}

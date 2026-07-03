@@ -184,8 +184,23 @@ impl HistoryStore {
         context: &SuggestionContext,
         skip: u32,
     ) -> Result<Option<String>, rusqlite::Error> {
+        Ok(self
+            .suggest_ranked_list(prefix, context, skip + 1)?
+            .into_iter()
+            .nth(skip as usize))
+    }
+
+    /// The first `limit` frecency-ranked full commands matching `prefix`.
+    /// Powers the merged multi-source suggestion pipeline, where cycling
+    /// indexes one concatenated candidate list.
+    pub fn suggest_ranked_list(
+        &self,
+        prefix: &str,
+        context: &SuggestionContext,
+        limit: u32,
+    ) -> Result<Vec<String>, rusqlite::Error> {
         if prefix.is_empty() {
-            return Ok(None);
+            return Ok(Vec::new());
         }
 
         let escaped_prefix = prefix
@@ -203,7 +218,6 @@ impl HistoryStore {
 
         let mut statement = self.conn.prepare_cached(
             "SELECT history.command,
-                    -- Recency score based on most recent execution
                     CASE
                         WHEN MAX(timestamp) >= (:now - 3600) THEN 100
                         WHEN MAX(timestamp) >= (:now - 86400) THEN 80
@@ -211,7 +225,6 @@ impl HistoryStore {
                         WHEN MAX(timestamp) >= (:now - 2592000) THEN 40
                         ELSE 20
                     END AS recency_score,
-                    -- Frequency score
                     CASE
                         WHEN COUNT(*) >= 50 THEN 50
                         WHEN COUNT(*) >= 10 THEN 35
@@ -219,7 +232,6 @@ impl HistoryStore {
                         WHEN COUNT(*) >= 2 THEN 15
                         ELSE 5
                     END AS frequency_score,
-                    -- Directory bonus: +20 if any execution was in context cwd
                     CASE
                         WHEN :cwd != '' AND SUM(CASE WHEN cwd = :cwd THEN 1 ELSE 0 END) > 0 THEN 20
                         ELSE 0
@@ -229,7 +241,6 @@ impl HistoryStore {
                         WHEN SUM(CASE WHEN exit_code IS NOT NULL AND exit_code != 0 THEN 1 ELSE 0 END) * 2 > COUNT(CASE WHEN exit_code IS NOT NULL THEN 1 END) THEN -40
                         ELSE 0
                     END AS exit_penalty,
-                    -- Acceptance bonus: the user has accepted this suggestion before
                     CASE
                         WHEN COALESCE(MAX(acceptances.count), 0) >= 5 THEN 25
                         WHEN COALESCE(MAX(acceptances.count), 0) >= 1 THEN 15
@@ -241,24 +252,38 @@ impl HistoryStore {
              GROUP BY history.command
              ORDER BY (recency_score + frequency_score + directory_bonus + exit_penalty + acceptance_bonus) DESC,
                       MAX(timestamp) DESC
-             LIMIT 1 OFFSET :skip",
+             LIMIT :limit",
         )?;
 
-        let result = statement.query_row(
+        let rows = statement.query_map(
             rusqlite::named_params! {
                 ":now": now,
                 ":cwd": context_cwd,
                 ":pattern": like_pattern,
-                ":skip": skip,
+                ":limit": limit,
             },
             |row| row.get::<_, String>(0),
-        );
+        )?;
+        rows.collect()
+    }
 
-        match result {
-            Ok(command) => Ok(Some(command)),
-            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-            Err(error) => Err(error),
-        }
+    /// Distinct `cd ...` commands recorded while in `cwd`, most-used first.
+    /// Feeds navigation-history ranking for directory completion.
+    pub fn cd_commands_for_cwd(
+        &self,
+        cwd: &str,
+        limit: u32,
+    ) -> Result<Vec<String>, rusqlite::Error> {
+        let mut statement = self.conn.prepare_cached(
+            "SELECT command FROM history
+             WHERE cwd = ?1 AND command LIKE 'cd %'
+             GROUP BY command
+             ORDER BY COUNT(*) DESC, MAX(timestamp) DESC
+             LIMIT ?2",
+        )?;
+        let rows =
+            statement.query_map(rusqlite::params![cwd, limit], |row| row.get::<_, String>(0))?;
+        rows.collect()
     }
 
     /// Imports a batch of history entries in a single transaction.
