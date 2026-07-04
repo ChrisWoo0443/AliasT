@@ -127,6 +127,53 @@ BUFFER='git ch'; _ALIAST_INFLIGHT_BUF='git ch'; _ALIAST_GHOST_PAYLOAD=''
 _aliast_render_ghost
 check "async render clears ghost on empty payload" "" "$POSTDISPLAY"
 
+# --- stale ghost on non-insert buffer changes (backspace/kill/paste) ---
+# The real request fn must mark the buffer handled even when the daemon is
+# down, so the pre-redraw hook never double-requests after self-insert.
+_aliast_connect() { return 1 }
+BUFFER="git s"; _ALIAST_LAST_BUFFER=""
+_aliast_request_suggestion
+check "request marks buffer handled (dedupe)" "git s" "$_ALIAST_LAST_BUFFER"
+
+# From here on, record requests instead of sending them.
+typeset -ga _req_buffers
+_aliast_request_suggestion() { _req_buffers+=("$BUFFER"); typeset -g _ALIAST_LAST_BUFFER="$BUFFER" }
+
+_ALIAST_NL_STATE="inactive"
+
+# Backspace: "git st" (ghost "atus") -> "git": stale ghost must go, fresh request must fire.
+BUFFER="git"; _ALIAST_LAST_BUFFER="git st"; POSTDISPLAY="atus"; _req_buffers=()
+_aliast_line_pre_redraw
+check "backspace: stale ghost cleared" "" "$POSTDISPLAY"
+check "backspace: fresh suggestion requested" "git" "${_req_buffers[-1]}"
+
+# Unchanged buffer (e.g. cycling, async render): keep ghost, no request.
+BUFFER="git ch"; _ALIAST_LAST_BUFFER="git ch"; POSTDISPLAY="eckout"; _req_buffers=()
+_aliast_line_pre_redraw
+check "unchanged buffer: ghost kept" "eckout" "$POSTDISPLAY"
+check "unchanged buffer: no request" "0" "${#_req_buffers}"
+
+# Emptied buffer: clear, but never request for an empty buffer.
+BUFFER=""; _ALIAST_LAST_BUFFER="git"; POSTDISPLAY="atus"; _req_buffers=()
+_aliast_line_pre_redraw
+check "emptied buffer: ghost cleared" "" "$POSTDISPLAY"
+check "emptied buffer: no request" "0" "${#_req_buffers}"
+
+# NL mode owns the buffer (spinner rewrites it): no ghost requests.
+_ALIAST_NL_STATE="input"
+BUFFER="list files"; _ALIAST_LAST_BUFFER="list"; _req_buffers=()
+_aliast_line_pre_redraw
+check "NL mode: no request on buffer change" "0" "${#_req_buffers}"
+_ALIAST_NL_STATE="inactive"
+
+# Incremental search owns the display: no clear/request mid-search.
+KEYMAP=isearch
+BUFFER="git p"; _ALIAST_LAST_BUFFER="git"; POSTDISPLAY="ull"; _req_buffers=()
+_aliast_line_pre_redraw
+check "isearch: ghost untouched" "ull" "$POSTDISPLAY"
+check "isearch: no request" "0" "${#_req_buffers}"
+unset KEYMAP
+
 # --- danger predicate for NL review tinting ---
 danger() { _aliast_is_dangerous "$1" && echo yes || echo no }
 check "danger: rm -rf"            "yes" "$(danger 'rm -rf /tmp/x')"

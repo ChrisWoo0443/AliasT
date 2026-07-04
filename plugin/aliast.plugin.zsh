@@ -226,6 +226,11 @@ _aliast_clear_ghost() {
 # (id match) and the buffer has not changed since (stale-render guard). Typing
 # latency is therefore independent of daemon latency.
 _aliast_request_suggestion() {
+  # Mark this buffer handled FIRST (even if the daemon is down): the
+  # pre-redraw hook re-requests for buffer changes no widget wrapper covers
+  # (backspace, kill, paste), and this marker is what keeps self-insert from
+  # double-requesting.
+  typeset -g _ALIAST_LAST_BUFFER="$BUFFER"
   _aliast_connect || return
 
   local skip="${1:-0}"
@@ -408,11 +413,22 @@ bindkey '\e[Z' _aliast_accept_word
 
 # ── 8. Hook registration (non-conflicting) ──────────────────────────
 _aliast_line_pre_redraw() {
+  # Incremental search owns the display: no clearing or requesting
+  # mid-search. LAST_BUFFER deliberately stays stale so leaving isearch
+  # triggers one fresh request below.
+  [[ "$KEYMAP" == isearch ]] && return
   if [[ "$BUFFER" != "$_ALIAST_LAST_BUFFER" ]]; then
     _ALIAST_LAST_BUFFER="$BUFFER"
-    if [[ -z "$BUFFER" ]]; then
-      _aliast_clear_ghost
-    fi
+    # NL mode rewrites the buffer itself (spinner/streaming); ghost text is
+    # suppressed there entirely.
+    [[ "$_ALIAST_NL_STATE" != "inactive" ]] && return
+    typeset -g _ALIAST_CYCLE_SKIP=0
+    # Any buffer change that reaches here came from something other than
+    # self-insert (backspace, kill, paste, history recall) -- self-insert
+    # already requested and marked the buffer handled. The displayed suffix
+    # no longer matches, so drop it and ask for a fresh one.
+    _aliast_clear_ghost
+    [[ -n "$BUFFER" ]] && _aliast_request_suggestion
   fi
 }
 add-zle-hook-widget zle-line-pre-redraw _aliast_line_pre_redraw
