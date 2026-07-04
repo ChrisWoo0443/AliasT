@@ -12,6 +12,19 @@ use crate::lifecycle;
 /// to finish before the process exits.
 const DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
+/// How often the daemon verifies its socket file still exists and is its own.
+/// macOS periodically purges /tmp: a daemon whose socket file vanished (or was
+/// replaced by a plugin-respawned successor at the same path) can never be
+/// reached by `aliast stop` again, so it must exit instead of lingering as an
+/// orphaned process.
+const SOCKET_CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// The inode of the file at `path`, or None if it cannot be stat'ed.
+fn socket_inode(path: &Path) -> Option<u64> {
+    use std::os::unix::fs::MetadataExt;
+    std::fs::metadata(path).map(|meta| meta.ino()).ok()
+}
+
 /// Cleans up any stale socket and binds a Unix listener at `socket_path`.
 ///
 /// Returns an error if another daemon is already listening or the bind fails,
@@ -44,13 +57,42 @@ pub async fn run_server_with_listener(
     socket_path: &Path,
     state: DaemonState,
 ) -> Result<()> {
+    run_server_with_listener_checked(listener, socket_path, state, SOCKET_CHECK_INTERVAL).await
+}
+
+/// Testable variant of [`run_server_with_listener`] with an explicit socket
+/// self-check interval.
+pub async fn run_server_with_listener_checked(
+    listener: UnixListener,
+    socket_path: &Path,
+    state: DaemonState,
+    check_interval: std::time::Duration,
+) -> Result<()> {
     let connections = TaskTracker::new();
+
+    // Identity of the socket file this server bound. If the file at the path
+    // later stops matching -- deleted by /tmp cleanup, or replaced by a
+    // successor daemon -- this process is unreachable by IPC and must exit.
+    let bound_inode = socket_inode(socket_path);
+    let mut socket_check = tokio::time::interval(check_interval);
 
     loop {
         tokio::select! {
             _ = state.cancel_token.cancelled() => {
                 tracing::info!("Shutdown signal received, stopping server");
                 break;
+            }
+            _ = socket_check.tick() => {
+                if bound_inode.is_some() && socket_inode(socket_path) != bound_inode {
+                    tracing::warn!(
+                        ?socket_path,
+                        "socket file missing or replaced -- shutting down instead of lingering as an orphan"
+                    );
+                    // Cancel the ROOT token so main() stops waiting on signals
+                    // and the whole process exits, not just this task.
+                    state.cancel_token.cancel();
+                    break;
+                }
             }
             accept_result = listener.accept() => {
                 match accept_result {
@@ -84,7 +126,12 @@ pub async fn run_server_with_listener(
         tracing::warn!("Timed out draining connections on shutdown");
     }
 
-    lifecycle::remove_socket(socket_path);
+    // Remove the socket file only if it is still the one this server bound:
+    // a successor daemon may own the path by now, and deleting its socket
+    // would strand it exactly the way this check exists to prevent.
+    if bound_inode.is_some() && socket_inode(socket_path) == bound_inode {
+        lifecycle::remove_socket(socket_path);
+    }
     tracing::info!("Server stopped");
     Ok(())
 }

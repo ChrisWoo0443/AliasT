@@ -297,3 +297,110 @@ async fn bind_fails_when_another_daemon_is_already_listening() {
         "second bind on an in-use socket must return Err, got Ok"
     );
 }
+
+/// Helper: like start_test_server, but with a fast socket self-check and the
+/// server task handle returned so tests can observe the server exiting.
+async fn start_checked_server(
+    check_interval: Duration,
+) -> (
+    std::path::PathBuf,
+    CancellationToken,
+    tokio::task::JoinHandle<()>,
+    tempfile::TempDir,
+) {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let socket_path = temp_dir.path().join("test.sock");
+    let db_path = temp_dir.path().join("history.db");
+    let cancel_token = CancellationToken::new();
+
+    let store = HistoryStore::open(&db_path).unwrap();
+    let state = DaemonState {
+        store: Arc::new(Mutex::new(store)),
+        ai_backend: None,
+        cancel_token: cancel_token.clone(),
+        enabled: Arc::new(AtomicBool::new(true)),
+        backend_name: "none".to_string(),
+        model_name: String::new(),
+    };
+
+    let listener = server::bind(&socket_path).unwrap();
+    let server_path = socket_path.clone();
+    let handle = tokio::spawn(async move {
+        server::run_server_with_listener_checked(listener, &server_path, state, check_interval)
+            .await
+            .unwrap();
+    });
+
+    (socket_path, cancel_token, handle, temp_dir)
+}
+
+#[tokio::test]
+async fn server_exits_when_its_socket_file_is_deleted() {
+    let (socket_path, _cancel_token, handle, _temp_dir) =
+        start_checked_server(Duration::from_millis(50)).await;
+
+    // A ping round-trip proves the server task is past its startup (where it
+    // records the bound socket's inode) before we touch the file.
+    let mut stream = UnixStream::connect(&socket_path).await.unwrap();
+    send_and_receive(&mut stream, r#"{"type":"ping","id":"ready1"}"#).await;
+    drop(stream);
+
+    // macOS /tmp cleanup pulls the socket file out from under the daemon.
+    std::fs::remove_file(&socket_path).unwrap();
+
+    timeout(Duration::from_secs(2), handle)
+        .await
+        .expect("server should exit soon after its socket file disappears")
+        .unwrap();
+}
+
+#[tokio::test]
+async fn server_exits_when_its_socket_file_is_replaced() {
+    let (socket_path, _cancel_token, handle, _temp_dir) =
+        start_checked_server(Duration::from_millis(50)).await;
+
+    // A ping round-trip proves the server task is past its startup (where it
+    // records the bound socket's inode) before we touch the file.
+    let mut stream = UnixStream::connect(&socket_path).await.unwrap();
+    send_and_receive(&mut stream, r#"{"type":"ping","id":"ready2"}"#).await;
+    drop(stream);
+
+    // A successor daemon takes over the path: same location, new inode.
+    std::fs::remove_file(&socket_path).unwrap();
+    let _successor = std::os::unix::net::UnixListener::bind(&socket_path).unwrap();
+
+    timeout(Duration::from_secs(2), handle)
+        .await
+        .expect("server should exit soon after its socket file is replaced")
+        .unwrap();
+
+    // The dying server must NOT remove the successor's socket file.
+    assert!(
+        socket_path.exists(),
+        "successor's socket must survive the orphan's shutdown"
+    );
+}
+
+#[tokio::test]
+async fn server_survives_socket_checks_while_file_intact() {
+    let (socket_path, cancel_token, handle, _temp_dir) =
+        start_checked_server(Duration::from_millis(50)).await;
+
+    // Several check intervals pass with the file intact.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert!(
+        !handle.is_finished(),
+        "server must keep running while it owns its socket"
+    );
+
+    // ...and it is still actually serving.
+    let mut stream = UnixStream::connect(&socket_path).await.unwrap();
+    let response = send_and_receive(&mut stream, r#"{"type":"ping","id":"sc1"}"#).await;
+    assert!(response.contains("pong"), "got: {response}");
+
+    cancel_token.cancel();
+    timeout(Duration::from_secs(2), handle)
+        .await
+        .expect("clean shutdown after cancel")
+        .unwrap();
+}
