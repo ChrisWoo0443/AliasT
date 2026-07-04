@@ -3,6 +3,6 @@ resolver = "2"
 members = ["crates/aliast-daemon", "crates/aliast-protocol", "crates/aliast-core"]
 
 [workspace.package]
-version = "1.3.1"
+version = "1.3.2"
 # edition 2024 needs >=1.85; let-chains (used in the daemon) need >=1.88.
 rust-version = "1.88"
